@@ -1,0 +1,378 @@
+// EducLM — database schema
+//
+// Mirrors section 5 of EducLM-BACKEND.md. Departures from that document, all
+// deliberate and recorded in README.md → "Deviations from the spec":
+//
+//  1. generator is `prisma-client`, not `prisma-client-js`. The latter is
+//     deprecated in Prisma 7 and requires an explicit output path now.
+//  2. `vector(384)` not `vector(1536)`. Embeddings run locally on
+//     bge-small-en-v1.5 (zero cost, no API key); that model emits 384 dims.
+//  3. `directUrl` added — Supabase's transaction pooler cannot run DDL, so
+//     migrations need the direct 5432 connection.
+//  4. Three models the spec's prose requires but its schema block omits:
+//     `PageText`      — GET /materials/:id/pages/:page must return the ORIGINAL
+//                       page text; chunks overlap and so cannot reconstruct it.
+//     `MisconceptionTag` — section 9 mandates a stored "controlled vocabulary
+//                       per material"; findings read their label/description
+//                       from it.
+//     `Material.contentHash` — section 8 requires a re-uploaded identical file
+//                       to reuse the previous extraction.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  runtime      = "nodejs"
+}
+
+// Prisma 7 forbids connection URLs here. `url` / `directUrl` live in
+// prisma.config.ts for the CLI, and the running server passes a driver
+// adapter (@prisma/adapter-pg) to the PrismaClient constructor.
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  deviceId     String   @unique // anonymous session key for MVP
+  displayName  String?
+  preferences  Json // AccessibilityPreferences
+  createdAt    DateTime @default(now())
+
+  materials    Material[]
+  practiceSets PracticeSet[]
+  responses    Response[]
+  findings     MisconceptionFinding[]
+  plans        LearningPlan[]
+  chatMessages ChatMessage[]
+}
+
+model Material {
+  id               String         @id @default(cuid())
+  userId           String
+  title            String
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  storageKey       String
+  contentHash      String? // sha256 of the upload; enables extraction reuse
+  status           MaterialStatus @default(UPLOADED)
+  stage            IngestionStage?
+  stagePercent     Int            @default(0)
+  pageCount        Int?
+  failureCode      String?
+  failureMessage   String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks       Chunk[]
+  topics       Topic[]
+  questions    Question[]
+  plans        LearningPlan[]
+  practiceSets PracticeSet[]
+  chatMessages ChatMessage[]
+  pages        PageText[]
+  tags         MisconceptionTag[]
+
+  @@index([userId, createdAt])
+  @@index([userId, contentHash])
+}
+
+enum MaterialStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum IngestionStage {
+  EXTRACTING
+  CHUNKING
+  EXTRACTING_TOPICS
+  EMBEDDING
+  BUILDING_LESSONS
+  DONE
+}
+
+/// Verbatim text of one PDF page, kept so the student can compare the
+/// accessible lesson against the original side by side.
+model PageText {
+  id         String @id @default(cuid())
+  materialId String
+  page       Int
+  text       String
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, page])
+}
+
+model Chunk {
+  id           String  @id @default(cuid())
+  materialId   String
+  page         Int
+  orderIndex   Int
+  content      String
+  charCount    Int
+  sectionTitle String?
+  embedding    Unsupported("vector(384)")?
+
+  material  Material   @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([materialId, page])
+}
+
+model Topic {
+  id                   String   @id @default(cuid())
+  materialId           String
+  name                 String
+  slug                 String
+  summary              String
+  orderIndex           Int
+  sourcePages          Int[]
+  prerequisiteTopicIds String[]
+  createdAt            DateTime @default(now())
+
+  material  Material               @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  sections  LessonSection[]
+  questions Question[]
+  responses Response[]
+  findings  MisconceptionFinding[]
+  planSteps PlanStep[]
+
+  @@unique([materialId, slug])
+  @@index([materialId, orderIndex])
+}
+
+model LessonSection {
+  id           String      @id @default(cuid())
+  topicId      String
+  heading      String
+  level        Int         @default(2)
+  bodyMarkdown String
+  orderIndex   Int
+  sourcePages  Int[]
+  kind         SectionKind @default(TEXT)
+  needsReview  Boolean     @default(false) // tables, equations, poor scans
+  generatedBy  String      @default("stub")
+  generatedAt  DateTime    @default(now())
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@index([topicId, orderIndex])
+}
+
+enum SectionKind {
+  TEXT
+  TABLE
+  EQUATION
+  FIGURE_DESCRIPTION
+}
+
+/// Controlled misconception vocabulary, generated once per material.
+/// The analytics engine groups by EXACT tag match, so free-text tags would
+/// silently break detection. Every distractor must reference one of these.
+model MisconceptionTag {
+  id          String @id @default(cuid())
+  materialId  String
+  tag         String
+  label       String // "Confusing assignment with comparison"
+  description String
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, tag])
+}
+
+model Question {
+  id              String     @id @default(cuid())
+  materialId      String
+  topicId         String
+  stem            String
+  difficulty      Difficulty @default(BEGINNER)
+  sourcePage      Int
+  sourceChunkId   String?
+  correctOptionId String
+  explanation     String
+  generatedBy     String // model identifier, for AI-usage disclosure
+  createdAt       DateTime   @default(now())
+
+  material    Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  topic       Topic            @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  sourceChunk Chunk?           @relation(fields: [sourceChunkId], references: [id], onDelete: SetNull)
+  options     QuestionOption[]
+  responses   Response[]
+
+  @@index([materialId, topicId])
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model QuestionOption {
+  id               String  @id @default(cuid())
+  questionId       String
+  label            String // "A" | "B" | "C" | "D"
+  text             String
+  misconceptionTag String? // null on the correct option
+
+  question  Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  responses Response[]
+
+  @@unique([questionId, label])
+}
+
+model PracticeSet {
+  id          String            @id @default(cuid())
+  userId      String
+  materialId  String
+  topicId     String?
+  kind        PracticeSetKind
+  status      PracticeSetStatus @default(IN_PROGRESS)
+  reason      String? // "Focused practice after 3 comparison-operator errors"
+  questionIds String[]
+  createdAt   DateTime          @default(now())
+  completedAt DateTime?
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  material  Material   @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  responses Response[]
+
+  @@index([userId, createdAt])
+}
+
+enum PracticeSetKind {
+  DIAGNOSTIC
+  FOCUSED
+  RETRY
+}
+
+enum PracticeSetStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+model Response {
+  id               String   @id @default(cuid())
+  userId           String
+  practiceSetId    String
+  questionId       String
+  topicId          String
+  selectedOptionId String
+  isCorrect        Boolean
+  misconceptionTag String? // denormalized from the chosen option, for fast analytics
+  timeSpentMs      Int
+  attemptNumber    Int      @default(1)
+  answeredAt       DateTime @default(now())
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  practiceSet    PracticeSet     @relation(fields: [practiceSetId], references: [id], onDelete: Cascade)
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  topic          Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  // Cascade, not SetNull: selectedOptionId is required, and a response whose
+  // chosen option no longer exists carries no analytic meaning.
+  selectedOption QuestionOption @relation(fields: [selectedOptionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, topicId, answeredAt])
+  @@index([practiceSetId])
+}
+
+model MisconceptionFinding {
+  id                  String        @id @default(cuid())
+  userId              String
+  topicId             String
+  tag                 String
+  label               String // "Confusing assignment with comparison"
+  description         String
+  occurrences         Int
+  windowSize          Int
+  evidenceResponseIds String[]
+  status              FindingStatus @default(ACTIVE)
+  detectedAt          DateTime      @default(now())
+  resolvedAt          DateTime?
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, topicId, tag, status])
+  @@index([userId, status])
+}
+
+enum FindingStatus {
+  ACTIVE
+  RESOLVED
+  DISMISSED
+}
+
+model LearningPlan {
+  id             String   @id @default(cuid())
+  userId         String
+  materialId     String
+  currentStepId  String?
+  lastAdaptation Json? // { at, reason, triggeredByFindingId, previousStepTitle, newStepTitle }
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  material Material   @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  steps    PlanStep[]
+
+  @@unique([userId, materialId])
+}
+
+model PlanStep {
+  id                   String         @id @default(cuid())
+  planId               String
+  kind                 PlanStepKind
+  title                String
+  description          String
+  topicId              String?
+  targetType           String? // "lesson" | "practice_set" | "page"
+  targetId             String?
+  targetPage           Int?
+  estimatedMinutes     Int            @default(5)
+  status               PlanStepStatus @default(PENDING)
+  orderIndex           Int
+  insertedByAdaptation Boolean        @default(false)
+
+  plan  LearningPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  topic Topic?       @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@index([planId, orderIndex])
+}
+
+enum PlanStepKind {
+  READ
+  PRACTICE
+  REVIEW
+  ADVANCE
+}
+
+enum PlanStepStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  SKIPPED
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  userId     String
+  materialId String
+  role       String // "user" | "assistant"
+  content    String
+  citations  Json // Citation[]
+  topicId    String?
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, createdAt])
+}
