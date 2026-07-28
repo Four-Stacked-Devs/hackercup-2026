@@ -1,0 +1,426 @@
+@import 'tailwindcss';
+
+/*
+ * EducLM design system.
+ *
+ * From the product mockups: a white workspace, a near-black navy rail, one
+ * bright lime accent carrying actions and progress, thin grey rules, very
+ * small radii, and compact black type. Colour never decorates — lime means
+ * "this is the action or the progress", and every status keeps its word.
+ *
+ * Everything the student can change — text size, spacing, contrast, font — is a
+ * custom property set on <html> by PreferencesProvider, so a preference change
+ * reflows the page without re-rendering the tree.
+ */
+:root {
+  --ink: #0b0d10;
+  --ink-muted: #6b7280;
+  /* Still readable on white at 11px: contrast is not negotiable for the
+     quietest text in the app. */
+  --ink-subtle: #6b7280;
+
+  --surface: #ffffff;
+  --surface-sunken: #f6f7f8;
+  --canvas: #ffffff;
+  --line: #e5e7eb;
+  --line-strong: #d1d5db;
+
+  /* The rail and the mobile tab bar. */
+  --nav: #14171c;
+  --nav-raised: #21252c;
+  --nav-ink: #e6e8ea;
+  --nav-ink-muted: #98a0ac;
+
+  /* The one accent. Actions, active navigation, progress, selected controls. */
+  --lime: #c4f135;
+  --lime-strong: #b2de22;
+  --lime-soft: #f2fcd6;
+  --lime-ink: #0b0d10;
+
+  /* Kept as an alias so "primary" reads as the accent everywhere. */
+  --primary: #14171c;
+  --primary-strong: #000000;
+  --primary-soft: #f1f3f5;
+
+  /* Status. Each pairs with a word, never a colour on its own. */
+  --strong: #16a34a;
+  --strong-ink: #106c33;
+  --strong-soft: #ecfdf3;
+  --developing: #2563eb;
+  --developing-ink: #1d4ed8;
+  --developing-soft: #eff4ff;
+  --attention: #dc2626;
+  --attention-ink: #b91c1c;
+  --attention-soft: #fef2f2;
+  --neutral: #9ca3af;
+  --neutral-soft: #f3f4f6;
+
+  --focus: #0b0d10;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --shadow-card: 0 1px 2px rgb(11 13 16 / 0.05);
+  --shadow-raised: 0 4px 16px rgb(11 13 16 / 0.08);
+
+  /* Preference-driven. Defaults match AccessibilityPreferences defaults. */
+  --font-scale: 1;
+  --line-height-body: 1.55;
+  --letter-spacing-body: 0;
+  --font-heading: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* High contrast goes beyond AA: pure black on white, solid rules, no tint
+   carrying meaning on its own. */
+[data-contrast='high'] {
+  --ink: #000000;
+  --ink-muted: #1a1a1a;
+  --ink-subtle: #262626;
+  --surface: #ffffff;
+  --surface-sunken: #ffffff;
+  --canvas: #ffffff;
+  --line: #000000;
+  --line-strong: #000000;
+  --nav: #000000;
+  --nav-raised: #262626;
+  --nav-ink: #ffffff;
+  --nav-ink-muted: #ededed;
+  --lime: #d8ff00;
+  --lime-strong: #c2e600;
+  --lime-soft: #ffffff;
+  --lime-ink: #000000;
+  --primary: #000000;
+  --primary-strong: #000000;
+  --primary-soft: #ffffff;
+  --strong: #05603a;
+  --strong-ink: #04422a;
+  --strong-soft: #ffffff;
+  --developing: #123a99;
+  --developing-ink: #0d2c78;
+  --developing-soft: #ffffff;
+  --attention: #a30f0f;
+  --attention-ink: #8a0c0c;
+  --attention-soft: #ffffff;
+  --neutral: #3f3f46;
+  --neutral-soft: #ffffff;
+  --focus: #000000;
+  --shadow-card: none;
+  --shadow-raised: none;
+}
+
+[data-readable-font='true'] {
+  --font-body: Verdana, Tahoma, 'DejaVu Sans', ui-sans-serif, sans-serif;
+  --font-heading: Verdana, Tahoma, 'DejaVu Sans', ui-sans-serif, sans-serif;
+  --letter-spacing-body: 0.012em;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-canvas: var(--canvas);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-nav: var(--nav);
+  --color-nav-raised: var(--nav-raised);
+  --color-nav-ink: var(--nav-ink);
+  --color-nav-ink-muted: var(--nav-ink-muted);
+  --color-lime: var(--lime);
+  --color-lime-strong: var(--lime-strong);
+  --color-lime-soft: var(--lime-soft);
+  --color-lime-ink: var(--lime-ink);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-soft: var(--primary-soft);
+  --color-strong: var(--strong);
+  --color-strong-ink: var(--strong-ink);
+  --color-strong-soft: var(--strong-soft);
+  --color-developing: var(--developing);
+  --color-developing-ink: var(--developing-ink);
+  --color-developing-soft: var(--developing-soft);
+  --color-attention: var(--attention);
+  --color-attention-ink: var(--attention-ink);
+  --color-attention-soft: var(--attention-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-heading);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  /* Compact scale. Headings are small and heavy rather than large and light. */
+  --text-xs: 0.6875rem;
+  --text-xs--line-height: 1.35;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.45;
+  --text-xl: 1.125rem;
+  --text-xl--line-height: 1.35;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.25;
+  --text-3xl: 1.75rem;
+  --text-3xl--line-height: 1.2;
+}
+
+/* fontScale multiplies the root size, so every rem in the app scales with it. */
+html {
+  font-size: calc(16px * var(--font-scale));
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  letter-spacing: var(--letter-spacing-body);
+  /* 320px has to hold at 1.75x, so nothing is allowed to push the page wide. */
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+  line-height: 1.25;
+  letter-spacing: -0.014em;
+  font-weight: 700;
+}
+
+/* One visible focus ring everywhere, including inside the navy rail. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+[data-nav] :focus-visible {
+  outline-color: var(--lime);
+}
+
+::selection {
+  background: var(--lime);
+  color: var(--lime-ink);
+}
+
+/* Both the OS setting and the in-app preference stop motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-reduced-motion='true'] *,
+[data-reduced-motion='true'] *::before,
+[data-reduced-motion='true'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  border: 2px solid var(--ink);
+}
+
+/* Lesson prose keeps a comfortable reading size of its own, and a 68-character
+   measure, whatever the compact UI scale around it does. */
+.prose-lesson {
+  max-width: 68ch;
+  font-size: 1rem;
+  line-height: var(--line-height-body);
+}
+
+/* Explanations and chat answers keep the compact UI size; only the lesson
+   itself gets the larger reading size. */
+.prose-lesson.prose-compact {
+  font-size: var(--text-base);
+}
+
+.prose-lesson p,
+.prose-lesson ul,
+.prose-lesson ol,
+.prose-lesson pre,
+.prose-lesson table {
+  margin-block: 0.8em;
+}
+
+.prose-lesson ul,
+.prose-lesson ol {
+  padding-inline-start: 1.35em;
+}
+
+.prose-lesson ul {
+  list-style: disc;
+}
+
+.prose-lesson ol {
+  list-style: decimal;
+}
+
+.prose-lesson li {
+  margin-block: 0.28em;
+}
+
+.prose-lesson h3,
+.prose-lesson h4 {
+  margin-block: 1.15em 0.35em;
+  font-weight: 700;
+}
+
+.prose-lesson code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.1em 0.3em;
+  /* Long identifiers must not force a horizontal scrollbar at 320px. */
+  overflow-wrap: anywhere;
+}
+
+.prose-lesson pre {
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.8em 0.95em;
+  overflow-x: auto;
+}
+
+.prose-lesson pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.prose-lesson a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--lime);
+  text-underline-offset: 2px;
+}
+
+.prose-lesson table {
+  width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.prose-lesson th,
+.prose-lesson td {
+  border: 1px solid var(--line);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+
+.prose-lesson blockquote {
+  border-inline-start: 3px solid var(--lime);
+  padding-inline-start: 0.85em;
+  color: var(--ink-muted);
+}
+
+/* The sentence being read aloud. */
+.read-aloud-active {
+  background: var(--lime);
+  color: var(--lime-ink);
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--lime);
+}
+
+@keyframes educlm-slide-up {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes educlm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes educlm-trail-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: educlm-slide-up 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.animate-fade-in {
+  animation: educlm-fade-in 150ms ease-out;
+}
+
+.animate-trail {
+  animation: educlm-trail-unfold 240ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+}
+
+@keyframes educlm-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.7), transparent);
+  animation: educlm-shimmer 1.4s infinite;
+}

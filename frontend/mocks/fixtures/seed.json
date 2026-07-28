@@ -1,0 +1,1417 @@
+{
+  "generatedFrom": "backend/apps/api/prisma/seed-content.ts + seed-questions.ts",
+  "material": {
+    "id": "mat_demo_js",
+    "title": "JavaScript Basics — Grade 11 Module",
+    "filename": "javascript-basics-grade11.pdf",
+    "pageCount": 42
+  },
+  "vocabulary": [
+    {
+      "tag": "assignment_vs_comparison",
+      "label": "Confusing assignment with comparison",
+      "description": "Using = (which stores a value) where == or === (which compares values) is needed."
+    },
+    {
+      "tag": "strict_vs_loose_equality",
+      "label": "Mixing up == and ===",
+      "description": "Treating loose equality (==) and strict equality (===) as interchangeable, when == converts types first."
+    },
+    {
+      "tag": "operator_precedence",
+      "label": "Getting the order of operators wrong",
+      "description": "Evaluating an expression left to right instead of applying precedence rules."
+    },
+    {
+      "tag": "truthy_falsy",
+      "label": "Misjudging truthy and falsy values",
+      "description": "Assuming a value like 0, \"\" or [] behaves as true or false when the opposite is the case."
+    },
+    {
+      "tag": "scope_confusion",
+      "label": "Losing track of where a variable exists",
+      "description": "Expecting a variable declared inside a block or function to be visible outside it."
+    }
+  ],
+  "topics": [
+    {
+      "id": "topic_variables",
+      "slug": "variables",
+      "name": "Variables",
+      "summary": "How to store a value under a name using let, const and var, and when each one is appropriate.",
+      "firstPage": 1,
+      "lastPage": 5,
+      "prerequisiteSlugs": [],
+      "pages": [
+        {
+          "heading": "What a Variable Is",
+          "body": "A variable is a named place to keep a value so you can use it again later. In JavaScript you create one with the keyword let, followed by a name, then an equals sign and the value.\n\nlet score = 10;\n\nThe name is score. The value is 10. From this point on, writing score gives you 10.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Declaring with let",
+          "body": "Use let when the value will change while the program runs.\n\nlet attempts = 0;\nattempts = 1;\nattempts = 2;\n\nEach line after the first assigns a new value. You only write let once, when the variable is first created.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Declaring with const",
+          "body": "Use const when the value must not be reassigned.\n\nconst maxAttempts = 3;\n\nTrying to assign a new value to a const causes an error. Choose const by default, and switch to let only when you know the value has to change.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Naming Variables",
+          "body": "A variable name may contain letters, digits, underscores and dollar signs, but it cannot begin with a digit. Names are case sensitive, so score and Score are two different variables.\n\nGood names describe the value: totalMarks is clearer than tm.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "The Older var Keyword",
+          "body": "Older code uses var. A var declaration is visible throughout the whole function that contains it, even before the line where it appears. This behaviour causes confusion, so modern code prefers let and const.",
+          "kind": "text",
+          "needsReview": false
+        }
+      ]
+    },
+    {
+      "id": "topic_data_types",
+      "slug": "data_types",
+      "name": "Data Types",
+      "summary": "The basic kinds of value in JavaScript — numbers, strings, booleans, null and undefined — and how to check which one you have.",
+      "firstPage": 6,
+      "lastPage": 10,
+      "prerequisiteSlugs": [
+        "variables"
+      ],
+      "pages": [
+        {
+          "heading": "Numbers",
+          "body": "JavaScript has a single number type. It covers whole numbers and decimals alike.\n\nlet count = 7;\nlet price = 19.95;\n\nArithmetic uses the symbols +, -, * and /.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Strings",
+          "body": "A string is text. Write it between single quotes, double quotes or backticks.\n\nlet name = 'Ana';\nlet greeting = \"Hello\";\n\nBackticks allow a value to be inserted directly with the dollar-brace form.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Booleans",
+          "body": "A boolean is either true or false. Booleans are what comparisons produce, and what conditions test.\n\nlet passed = true;\nlet failed = false;",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "null and undefined",
+          "body": "undefined means a variable has been declared but never given a value. null means it has deliberately been given \"no value\".\n\nlet a;\nlet b = null;\n\nThe variable a is undefined. The variable b is null.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Checking a Type",
+          "body": "The typeof operator reports the type of a value as a string.\n\ntypeof 7 gives \"number\"\ntypeof 'Ana' gives \"string\"\ntypeof true gives \"boolean\"",
+          "kind": "text",
+          "needsReview": false
+        }
+      ]
+    },
+    {
+      "id": "topic_operators",
+      "slug": "operators",
+      "name": "Operators",
+      "summary": "Arithmetic, assignment and comparison operators, and the order in which JavaScript applies them.",
+      "firstPage": 11,
+      "lastPage": 15,
+      "prerequisiteSlugs": [
+        "data_types"
+      ],
+      "pages": [
+        {
+          "heading": "Arithmetic Operators",
+          "body": "The arithmetic operators are + for addition, - for subtraction, * for multiplication, / for division and % for the remainder.\n\n10 % 3 gives 1, because 3 goes into 10 three times with 1 left over.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "The Assignment Operator",
+          "body": "A single equals sign is the assignment operator. It stores the value on the right into the variable on the left.\n\nlet total = 5;\n\nThis does not ask whether total equals 5. It makes total equal 5.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Operator Precedence",
+          "body": "Multiplication and division are applied before addition and subtraction.\n\n2 + 3 * 4 gives 14, not 20, because 3 * 4 is evaluated first.\n\nBrackets override the order. (2 + 3) * 4 gives 20.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Shorthand Assignment",
+          "body": "The shorthand forms combine arithmetic with assignment.\n\ntotal += 5 means total = total + 5\ntotal -= 2 means total = total - 2",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Comparison Operators",
+          "body": "Comparison operators produce a boolean. They are > greater than, < less than, >= at least, <= at most, === strictly equal and !== strictly not equal.\n\n7 > 3 gives true.",
+          "kind": "text",
+          "needsReview": false
+        }
+      ]
+    },
+    {
+      "id": "topic_conditionals",
+      "slug": "conditionals",
+      "name": "Conditionals",
+      "summary": "Using if, else if and else to choose between paths, and comparing values correctly with === rather than =.",
+      "firstPage": 16,
+      "lastPage": 21,
+      "prerequisiteSlugs": [
+        "operators"
+      ],
+      "pages": [
+        {
+          "heading": "The if Statement",
+          "body": "An if statement runs a block of code only when its condition is true.\n\nif (score > 50) {\n  console.log('Pass');\n}\n\nThe condition sits in brackets. The code to run sits in braces.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Comparing Values: = versus ==",
+          "body": "This is the most common mistake in this chapter.\n\nA single equals sign assigns. A double or triple equals sign compares.\n\nif (score = 50) is wrong. It stores 50 into score and then treats that as the condition.\n\nif (score === 50) is correct. It asks whether score is 50, and produces true or false.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Strict and Loose Equality",
+          "body": "The == operator converts the two values to the same type before comparing. The === operator does not: it requires the same type as well as the same value.\n\n'5' == 5 gives true, because the string is converted to a number.\n'5' === 5 gives false, because a string is not a number.\n\nPrefer === so that no hidden conversion happens.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "else and else if",
+          "body": "Use else for the case where the condition is false, and else if to test another condition.\n\nif (score >= 75) {\n  grade = 'A';\n} else if (score >= 50) {\n  grade = 'B';\n} else {\n  grade = 'F';\n}\n\nOnly the first matching branch runs.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Truthy and Falsy Values",
+          "body": "A condition does not have to be a boolean. JavaScript treats some values as false: 0, the empty string, null, undefined and NaN. Every other value, including the string \"0\" and an empty array, is treated as true.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Logical Operators",
+          "body": "Combine conditions with && for and, || for or, and ! for not.\n\nif (age >= 13 && age <= 19) tests both conditions at once.",
+          "kind": "text",
+          "needsReview": false
+        }
+      ]
+    },
+    {
+      "id": "topic_loops",
+      "slug": "loops",
+      "name": "Loops",
+      "summary": "Repeating work with for and while loops, and stopping at the right point.",
+      "firstPage": 22,
+      "lastPage": 26,
+      "prerequisiteSlugs": [
+        "conditionals"
+      ],
+      "pages": [
+        {
+          "heading": "The for Loop",
+          "body": "A for loop repeats a block a fixed number of times.\n\nfor (let i = 0; i < 5; i++) {\n  console.log(i);\n}\n\nIt has three parts: a starting value, a condition to keep going, and a step.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Counting from Zero",
+          "body": "Loops usually start at 0 because positions in a list start at 0. A loop written with i < length runs exactly length times.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "The while Loop",
+          "body": "A while loop repeats for as long as its condition stays true.\n\nwhile (attempts < 3) {\n  attempts++;\n}\n\nSomething inside the loop must eventually make the condition false, or the loop never ends.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "break and continue",
+          "body": "break leaves the loop immediately. continue skips the rest of the current pass and starts the next one.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Looping Over a List",
+          "body": "A for loop can visit every item in a list by using the position as an index, from 0 up to one less than the length.",
+          "kind": "text",
+          "needsReview": false
+        }
+      ]
+    },
+    {
+      "id": "topic_functions",
+      "slug": "functions",
+      "name": "Functions",
+      "summary": "Packaging code under a name so it can be reused, passing values in and returning a result.",
+      "firstPage": 27,
+      "lastPage": 32,
+      "prerequisiteSlugs": [
+        "loops"
+      ],
+      "pages": [
+        {
+          "heading": "Declaring a Function",
+          "body": "A function groups statements under a name so they can be run whenever needed.\n\nfunction greet() {\n  console.log('Hello');\n}\n\nWriting greet() runs the code inside.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Parameters and Arguments",
+          "body": "A parameter is a name listed in the declaration. An argument is the value supplied when the function is called.\n\nfunction greet(name) {\n  console.log('Hello ' + name);\n}\n\ngreet('Ana') passes 'Ana' as the argument.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Returning a Value",
+          "body": "The return keyword sends a value back to whoever called the function.\n\nfunction double(n) {\n  return n * 2;\n}\n\nlet result = double(4);\n\nNow result holds 8. Code written after a return never runs.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Function Scope",
+          "body": "A variable declared inside a function exists only inside that function. Code outside cannot see it.\n\nfunction count() {\n  let total = 0;\n}\n\nUsing total outside count() causes an error.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Arrow Functions",
+          "body": "An arrow function is a shorter way to write a function.\n\nconst double = (n) => n * 2;\n\nWhen the body is a single expression, its value is returned automatically.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Why Functions Matter",
+          "body": "Functions let you write a piece of logic once and use it in many places. If the logic needs fixing, you fix it in one spot.",
+          "kind": "text",
+          "needsReview": false
+        }
+      ]
+    },
+    {
+      "id": "topic_arrays",
+      "slug": "arrays",
+      "name": "Arrays",
+      "summary": "Storing an ordered list of values and reaching individual items by position.",
+      "firstPage": 33,
+      "lastPage": 37,
+      "prerequisiteSlugs": [
+        "functions"
+      ],
+      "pages": [
+        {
+          "heading": "Creating an Array",
+          "body": "An array holds several values in order, written between square brackets.\n\nlet marks = [70, 85, 92];",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Indexes Start at Zero",
+          "body": "The first item is at position 0.\n\nmarks[0] gives 70\nmarks[1] gives 85\n\nThe last item is at position length - 1.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Length",
+          "body": "The length property reports how many items an array holds. For [70, 85, 92], length is 3, and the highest valid index is 2.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Adding and Removing",
+          "body": "push adds an item to the end. pop removes the last item and gives it back.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Looping Over an Array",
+          "body": "A for loop from 0 while i < marks.length visits every item exactly once.",
+          "kind": "text",
+          "needsReview": false
+        }
+      ]
+    },
+    {
+      "id": "topic_objects",
+      "slug": "objects",
+      "name": "Objects",
+      "summary": "Grouping related values together under named keys rather than numbered positions.",
+      "firstPage": 38,
+      "lastPage": 42,
+      "prerequisiteSlugs": [
+        "arrays"
+      ],
+      "pages": [
+        {
+          "heading": "Creating an Object",
+          "body": "An object groups related values under names, written between braces.\n\nlet student = { name: 'Ana', age: 16 };",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Reading a Property",
+          "body": "Use a dot and the property name.\n\nstudent.name gives 'Ana'\n\nSquare brackets also work when the key is held in a variable.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Changing a Property",
+          "body": "Assign to a property to change it, or to add one that did not exist.\n\nstudent.age = 17;\nstudent.grade = 'A';",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Objects Inside Arrays",
+          "body": "A list of records is usually an array of objects, visited with a loop and read with a dot.",
+          "kind": "text",
+          "needsReview": false
+        },
+        {
+          "heading": "Objects Compared with Arrays",
+          "body": "Use an array when order matters and the items are the same kind of thing. Use an object when each value means something different and deserves a name.",
+          "kind": "text",
+          "needsReview": false
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q_variables_1",
+      "topicId": "topic_variables",
+      "stem": "Which keyword should you use for a value that must never be reassigned?",
+      "page": 3,
+      "difficulty": "beginner",
+      "correct": "A",
+      "explanation": "const prevents reassignment; assigning to a const throws an error (p.3).",
+      "options": [
+        {
+          "label": "A",
+          "text": "const",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "let",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "C",
+          "text": "var",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "D",
+          "text": "fixed",
+          "tag": "truthy_falsy"
+        }
+      ]
+    },
+    {
+      "id": "q_variables_2",
+      "topicId": "topic_variables",
+      "stem": "What does `let score = 10;` do?",
+      "page": 1,
+      "difficulty": "beginner",
+      "correct": "B",
+      "explanation": "A single = stores the value 10 under the name score (p.1).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Checks whether score is equal to 10",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "B",
+          "text": "Stores the value 10 in a variable named score",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "Compares score with 10 and returns true or false",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "D",
+          "text": "Creates a constant that cannot change",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_variables_3",
+      "topicId": "topic_variables",
+      "stem": "Which variable name is NOT valid in JavaScript?",
+      "page": 4,
+      "difficulty": "beginner",
+      "correct": "C",
+      "explanation": "A variable name cannot begin with a digit (p.4).",
+      "options": [
+        {
+          "label": "A",
+          "text": "total_marks",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "B",
+          "text": "$price",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "C",
+          "text": "2ndAttempt",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "studentAge",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_variables_4",
+      "topicId": "topic_variables",
+      "stem": "Are `score` and `Score` the same variable?",
+      "page": 4,
+      "difficulty": "beginner",
+      "correct": "D",
+      "explanation": "Variable names are case sensitive, so these are two different variables (p.4).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Yes, JavaScript ignores capital letters",
+          "tag": "strict_vs_loose_equality"
+        },
+        {
+          "label": "B",
+          "text": "Yes, but only inside a function",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "C",
+          "text": "Only if both are declared with const",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "D",
+          "text": "No, they are two different variables",
+          "tag": null
+        }
+      ]
+    },
+    {
+      "id": "q_variables_5",
+      "topicId": "topic_variables",
+      "stem": "Why does modern JavaScript prefer `let` and `const` over `var`?",
+      "page": 5,
+      "difficulty": "intermediate",
+      "correct": "A",
+      "explanation": "A var declaration is visible throughout its whole function, even before its line, which causes confusion (p.5).",
+      "options": [
+        {
+          "label": "A",
+          "text": "var is visible through the whole function, which is confusing",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "var cannot store numbers",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "C",
+          "text": "var compares values instead of assigning them",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "D",
+          "text": "var only works inside loops",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_variables_6",
+      "topicId": "topic_variables",
+      "stem": "How many times do you write `let` for the same variable?",
+      "page": 2,
+      "difficulty": "beginner",
+      "correct": "B",
+      "explanation": "You write let once, when the variable is first created (p.2).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Every time you change its value",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "B",
+          "text": "Once, when the variable is first created",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "Once per function that uses it",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "D",
+          "text": "Only when comparing it to another value",
+          "tag": "assignment_vs_comparison"
+        }
+      ]
+    },
+    {
+      "id": "q_conditionals_1",
+      "topicId": "topic_conditionals",
+      "stem": "What is wrong with `if (score = 50) { ... }`?",
+      "page": 17,
+      "difficulty": "beginner",
+      "correct": "C",
+      "explanation": "A single = assigns. It stores 50 into score instead of asking whether score is 50. Use === (p.17).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Nothing — this correctly checks whether score is 50",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "B",
+          "text": "The brackets are in the wrong place",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "It assigns 50 to score instead of comparing",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "score must be declared with const first",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_conditionals_2",
+      "topicId": "topic_conditionals",
+      "stem": "Which operator asks whether two values are the same, without converting types?",
+      "page": 18,
+      "difficulty": "beginner",
+      "correct": "B",
+      "explanation": "=== is strict equality: it requires the same type as well as the same value (p.18).",
+      "options": [
+        {
+          "label": "A",
+          "text": "=",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "B",
+          "text": "===",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "==",
+          "tag": "strict_vs_loose_equality"
+        },
+        {
+          "label": "D",
+          "text": "=>",
+          "tag": "operator_precedence"
+        }
+      ]
+    },
+    {
+      "id": "q_conditionals_3",
+      "topicId": "topic_conditionals",
+      "stem": "What does `'5' === 5` evaluate to?",
+      "page": 18,
+      "difficulty": "intermediate",
+      "correct": "D",
+      "explanation": "Strict equality does not convert types, and a string is not a number (p.18).",
+      "options": [
+        {
+          "label": "A",
+          "text": "true, because both represent five",
+          "tag": "strict_vs_loose_equality"
+        },
+        {
+          "label": "B",
+          "text": "It stores 5 into the string",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "C",
+          "text": "It causes an error",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "D",
+          "text": "false, because a string is not a number",
+          "tag": null
+        }
+      ]
+    },
+    {
+      "id": "q_conditionals_4",
+      "topicId": "topic_conditionals",
+      "stem": "You want to run code only when `grade` holds the value \"A\". Which condition is correct?",
+      "page": 17,
+      "difficulty": "beginner",
+      "correct": "A",
+      "explanation": "Use === to compare. A single = would assign \"A\" to grade (p.17).",
+      "options": [
+        {
+          "label": "A",
+          "text": "if (grade === 'A')",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "if (grade = 'A')",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "C",
+          "text": "if (grade => 'A')",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "D",
+          "text": "if (grade := 'A')",
+          "tag": "assignment_vs_comparison"
+        }
+      ]
+    },
+    {
+      "id": "q_conditionals_5",
+      "topicId": "topic_conditionals",
+      "stem": "In an if / else if / else chain, how many branches run?",
+      "page": 19,
+      "difficulty": "beginner",
+      "correct": "C",
+      "explanation": "Only the first matching branch runs (p.19).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Every branch whose condition is true",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "B",
+          "text": "All of them, in order",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "Only the first branch that matches",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "None, unless else is present",
+          "tag": "truthy_falsy"
+        }
+      ]
+    },
+    {
+      "id": "q_conditionals_6",
+      "topicId": "topic_conditionals",
+      "stem": "Which of these values is treated as false in a condition?",
+      "page": 20,
+      "difficulty": "intermediate",
+      "correct": "B",
+      "explanation": "The falsy values are 0, the empty string, null, undefined and NaN. \"0\" and [] are truthy (p.20).",
+      "options": [
+        {
+          "label": "A",
+          "text": "the string '0'",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "B",
+          "text": "the number 0",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "an empty array []",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "D",
+          "text": "the string \"false\"",
+          "tag": "strict_vs_loose_equality"
+        }
+      ]
+    },
+    {
+      "id": "q_functions_1",
+      "topicId": "topic_functions",
+      "stem": "What does the `return` keyword do?",
+      "page": 29,
+      "difficulty": "beginner",
+      "correct": "A",
+      "explanation": "return sends a value back to whoever called the function (p.29).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Sends a value back to the caller",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "Prints a value to the console",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "C",
+          "text": "Restarts the function from the top",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "D",
+          "text": "Stores the value in a global variable",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_functions_2",
+      "topicId": "topic_functions",
+      "stem": "A variable declared with `let` inside a function can be used where?",
+      "page": 30,
+      "difficulty": "intermediate",
+      "correct": "C",
+      "explanation": "It exists only inside that function; code outside cannot see it (p.30).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Anywhere in the file",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "B",
+          "text": "Anywhere after the function is declared",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "C",
+          "text": "Only inside that function",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "Only inside loops within that function",
+          "tag": "operator_precedence"
+        }
+      ]
+    },
+    {
+      "id": "q_functions_3",
+      "topicId": "topic_functions",
+      "stem": "In `function greet(name) { ... }`, what is `name`?",
+      "page": 28,
+      "difficulty": "beginner",
+      "correct": "D",
+      "explanation": "A parameter is the name in the declaration; the value passed at the call is the argument (p.28).",
+      "options": [
+        {
+          "label": "A",
+          "text": "An argument",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "B",
+          "text": "A global variable",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "C",
+          "text": "A comparison",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "D",
+          "text": "A parameter",
+          "tag": null
+        }
+      ]
+    },
+    {
+      "id": "q_functions_4",
+      "topicId": "topic_functions",
+      "stem": "What does `double(4)` give, if `function double(n) { return n * 2; }`?",
+      "page": 29,
+      "difficulty": "beginner",
+      "correct": "B",
+      "explanation": "The function returns n * 2, so 4 * 2 is 8 (p.29).",
+      "options": [
+        {
+          "label": "A",
+          "text": "4",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "B",
+          "text": "8",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "undefined",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "D",
+          "text": "It causes an error",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_functions_5",
+      "topicId": "topic_functions",
+      "stem": "What happens to code written after a `return` statement?",
+      "page": 29,
+      "difficulty": "intermediate",
+      "correct": "A",
+      "explanation": "Code after a return never runs (p.29).",
+      "options": [
+        {
+          "label": "A",
+          "text": "It never runs",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "It runs before the return",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "It runs only if the return value is false",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "D",
+          "text": "It runs in the calling function instead",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_functions_6",
+      "topicId": "topic_functions",
+      "stem": "What does the arrow function `const double = (n) => n * 2;` return?",
+      "page": 31,
+      "difficulty": "intermediate",
+      "correct": "C",
+      "explanation": "When the body is a single expression, its value is returned automatically (p.31).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Nothing, it needs an explicit return",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "B",
+          "text": "The value of n",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "n multiplied by 2",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "A new variable called double",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_data_types_1",
+      "topicId": "topic_data_types",
+      "stem": "What does `typeof 7` give?",
+      "page": 10,
+      "difficulty": "beginner",
+      "correct": "A",
+      "explanation": "typeof reports the type as a string; for 7 that is \"number\" (p.10).",
+      "options": [
+        {
+          "label": "A",
+          "text": "\"number\"",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "\"integer\"",
+          "tag": "strict_vs_loose_equality"
+        },
+        {
+          "label": "C",
+          "text": "7",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "D",
+          "text": "\"string\"",
+          "tag": "strict_vs_loose_equality"
+        }
+      ]
+    },
+    {
+      "id": "q_data_types_2",
+      "topicId": "topic_data_types",
+      "stem": "What is the difference between `null` and `undefined`?",
+      "page": 9,
+      "difficulty": "intermediate",
+      "correct": "B",
+      "explanation": "undefined means never given a value; null means deliberately given \"no value\" (p.9).",
+      "options": [
+        {
+          "label": "A",
+          "text": "They are identical",
+          "tag": "strict_vs_loose_equality"
+        },
+        {
+          "label": "B",
+          "text": "undefined was never set; null was set to \"no value\"",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "null is zero and undefined is an empty string",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "D",
+          "text": "null only appears inside functions",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_data_types_3",
+      "topicId": "topic_data_types",
+      "stem": "Which of these is a boolean?",
+      "page": 8,
+      "difficulty": "beginner",
+      "correct": "D",
+      "explanation": "A boolean is either true or false (p.8).",
+      "options": [
+        {
+          "label": "A",
+          "text": "'true'",
+          "tag": "strict_vs_loose_equality"
+        },
+        {
+          "label": "B",
+          "text": "1",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "C",
+          "text": "null",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "D",
+          "text": "false",
+          "tag": null
+        }
+      ]
+    },
+    {
+      "id": "q_operators_1",
+      "topicId": "topic_operators",
+      "stem": "What does `2 + 3 * 4` evaluate to?",
+      "page": 13,
+      "difficulty": "beginner",
+      "correct": "C",
+      "explanation": "Multiplication is applied before addition, so 3 * 4 is evaluated first (p.13).",
+      "options": [
+        {
+          "label": "A",
+          "text": "20",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "B",
+          "text": "24",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "14",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "9",
+          "tag": "operator_precedence"
+        }
+      ]
+    },
+    {
+      "id": "q_operators_2",
+      "topicId": "topic_operators",
+      "stem": "What does `10 % 3` give?",
+      "page": 11,
+      "difficulty": "beginner",
+      "correct": "A",
+      "explanation": "% is the remainder: 3 goes into 10 three times with 1 left over (p.11).",
+      "options": [
+        {
+          "label": "A",
+          "text": "1",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "3",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "3.33",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "D",
+          "text": "0",
+          "tag": "truthy_falsy"
+        }
+      ]
+    },
+    {
+      "id": "q_operators_3",
+      "topicId": "topic_operators",
+      "stem": "What does `total += 5` mean?",
+      "page": 14,
+      "difficulty": "beginner",
+      "correct": "B",
+      "explanation": "The shorthand += combines addition with assignment (p.14).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Checks whether total equals 5",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "B",
+          "text": "total = total + 5",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "total = 5",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "D",
+          "text": "Adds 5 only if total is already true",
+          "tag": "truthy_falsy"
+        }
+      ]
+    },
+    {
+      "id": "q_loops_1",
+      "topicId": "topic_loops",
+      "stem": "How many times does `for (let i = 0; i < 5; i++)` repeat?",
+      "page": 22,
+      "difficulty": "beginner",
+      "correct": "B",
+      "explanation": "It runs while i is less than 5, starting at 0 — five passes (p.22).",
+      "options": [
+        {
+          "label": "A",
+          "text": "4",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "B",
+          "text": "5",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "6",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "D",
+          "text": "Forever",
+          "tag": "truthy_falsy"
+        }
+      ]
+    },
+    {
+      "id": "q_loops_2",
+      "topicId": "topic_loops",
+      "stem": "What does `break` do inside a loop?",
+      "page": 25,
+      "difficulty": "beginner",
+      "correct": "C",
+      "explanation": "break leaves the loop immediately (p.25).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Skips to the next pass",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "B",
+          "text": "Restarts the loop",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "Leaves the loop immediately",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "Pauses until the condition is true",
+          "tag": "truthy_falsy"
+        }
+      ]
+    },
+    {
+      "id": "q_loops_3",
+      "topicId": "topic_loops",
+      "stem": "Why must something inside a `while` loop change the condition?",
+      "page": 24,
+      "difficulty": "intermediate",
+      "correct": "A",
+      "explanation": "Otherwise the condition stays true and the loop never ends (p.24).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Otherwise the loop never ends",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "Otherwise it runs exactly once",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "C",
+          "text": "Otherwise the variable leaves scope",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "D",
+          "text": "Otherwise the operators are applied backwards",
+          "tag": "operator_precedence"
+        }
+      ]
+    },
+    {
+      "id": "q_arrays_1",
+      "topicId": "topic_arrays",
+      "stem": "For `let marks = [70, 85, 92];`, what does `marks[1]` give?",
+      "page": 34,
+      "difficulty": "beginner",
+      "correct": "B",
+      "explanation": "Indexes start at 0, so position 1 is the second item (p.34).",
+      "options": [
+        {
+          "label": "A",
+          "text": "70",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "B",
+          "text": "85",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "92",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "D",
+          "text": "undefined",
+          "tag": "truthy_falsy"
+        }
+      ]
+    },
+    {
+      "id": "q_arrays_2",
+      "topicId": "topic_arrays",
+      "stem": "For an array of length 3, what is the highest valid index?",
+      "page": 35,
+      "difficulty": "beginner",
+      "correct": "C",
+      "explanation": "The highest index is length - 1, which is 2 (p.35).",
+      "options": [
+        {
+          "label": "A",
+          "text": "3",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "B",
+          "text": "4",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "2",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "1",
+          "tag": "operator_precedence"
+        }
+      ]
+    },
+    {
+      "id": "q_arrays_3",
+      "topicId": "topic_arrays",
+      "stem": "What does `pop` do?",
+      "page": 36,
+      "difficulty": "beginner",
+      "correct": "D",
+      "explanation": "pop removes the last item and gives it back (p.36).",
+      "options": [
+        {
+          "label": "A",
+          "text": "Adds an item to the end",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "B",
+          "text": "Removes the first item",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "Empties the array",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "D",
+          "text": "Removes the last item and returns it",
+          "tag": null
+        }
+      ]
+    },
+    {
+      "id": "q_objects_1",
+      "topicId": "topic_objects",
+      "stem": "For `let student = { name: 'Ana', age: 16 };`, how do you read the name?",
+      "page": 39,
+      "difficulty": "beginner",
+      "correct": "A",
+      "explanation": "Use a dot and the property name (p.39).",
+      "options": [
+        {
+          "label": "A",
+          "text": "student.name",
+          "tag": null
+        },
+        {
+          "label": "B",
+          "text": "student[0]",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "C",
+          "text": "student->name",
+          "tag": "strict_vs_loose_equality"
+        },
+        {
+          "label": "D",
+          "text": "name.student",
+          "tag": "scope_confusion"
+        }
+      ]
+    },
+    {
+      "id": "q_objects_2",
+      "topicId": "topic_objects",
+      "stem": "What happens with `student.grade = \"A\";` when `grade` does not exist yet?",
+      "page": 40,
+      "difficulty": "intermediate",
+      "correct": "B",
+      "explanation": "Assigning to a property that does not exist adds it (p.40).",
+      "options": [
+        {
+          "label": "A",
+          "text": "It causes an error",
+          "tag": "scope_confusion"
+        },
+        {
+          "label": "B",
+          "text": "It adds the property",
+          "tag": null
+        },
+        {
+          "label": "C",
+          "text": "It compares grade with \"A\"",
+          "tag": "assignment_vs_comparison"
+        },
+        {
+          "label": "D",
+          "text": "It replaces the whole object",
+          "tag": "truthy_falsy"
+        }
+      ]
+    },
+    {
+      "id": "q_objects_3",
+      "topicId": "topic_objects",
+      "stem": "When should you use an object rather than an array?",
+      "page": 42,
+      "difficulty": "intermediate",
+      "correct": "C",
+      "explanation": "Use an object when each value means something different and deserves a name (p.42).",
+      "options": [
+        {
+          "label": "A",
+          "text": "When the items are in a strict order",
+          "tag": "operator_precedence"
+        },
+        {
+          "label": "B",
+          "text": "When there are more than ten items",
+          "tag": "truthy_falsy"
+        },
+        {
+          "label": "C",
+          "text": "When each value means something different",
+          "tag": null
+        },
+        {
+          "label": "D",
+          "text": "When the values are all numbers",
+          "tag": "truthy_falsy"
+        }
+      ]
+    }
+  ]
+}
