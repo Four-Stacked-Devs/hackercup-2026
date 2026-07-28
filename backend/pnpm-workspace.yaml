@@ -1,0 +1,36 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm blocks postinstall scripts by default. These genuinely need them:
+#   prisma / @prisma/engines -> fetches the query + schema engines
+#   onnxruntime-node         -> native ONNX binaries for local embeddings
+#   sharp                    -> image codecs pulled in by @huggingface/transformers
+#   esbuild / protobufjs     -> platform binaries for tsx and onnxruntime
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  onnxruntime-node: true
+  prisma: true
+  protobufjs: true
+  sharp: true
+
+minimumReleaseAgeExclude:
+  - '@ai-sdk/anthropic@4.0.23'
+  - '@ai-sdk/gateway@4.0.30'
+  - '@ai-sdk/groq@4.0.15'
+  - '@ai-sdk/openai@4.0.22'
+  - '@ai-sdk/provider-utils@5.0.14'
+  - '@ai-sdk/provider@4.0.4'
+  - '@prisma/client-runtime-utils@7.9.1'
+  - '@prisma/client@7.9.1'
+  - '@prisma/config@7.9.1'
+  - '@prisma/debug@7.9.1'
+  - '@prisma/engines@7.9.1'
+  - '@prisma/fetch-engine@7.9.1'
+  - '@prisma/get-platform@7.9.1'
+  - '@types/node@26.1.2'
+  - ai@7.0.40
+  - prisma@7.9.1
+  - '@prisma/adapter-pg@7.9.1'
+  - '@prisma/driver-adapter-utils@7.9.1'

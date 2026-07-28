@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "test/**/*", "prisma/**/*", "prisma.config.ts", "vitest.config.ts"],
+  "exclude": ["src/generated/**", "dist", "node_modules"]
+}

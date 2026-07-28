@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# uploaded PDFs (section 11: uploaded documents are hard-deleted, never committed)
+.uploads/
+
+# generated prisma client
+apps/api/src/generated/
+
+# local ONNX embedding model cache
+.models/
+
+# embedded PGlite database (dev fallback when DATABASE_URL is unset)
+.pglite/
+
+# os
+Thumbs.db
+.DS_Store
+
+
+EducL*
