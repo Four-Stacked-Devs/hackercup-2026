@@ -95,6 +95,13 @@ export const ProgressIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const CopyIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+  </Icon>
+);
+
 export const AnalyticsIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M5 20v-8M12 20V5M19 20v-5" />
