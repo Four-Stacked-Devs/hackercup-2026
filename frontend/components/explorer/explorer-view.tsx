@@ -15,6 +15,7 @@ import { DocIcon, SearchIcon, TrashIcon, UploadIcon } from '@/components/ui/icon
 import { EduMascot } from '@/components/brand/edu-mascot';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
 import { useUploadDialog } from '@/components/upload/upload-dialog';
+import { ProcessingSummary, progressOf } from '@/components/upload/processing-stages';
 import { useDeleteMaterial } from '@/lib/hooks/use-materials';
 import { useProgressOverview } from '@/lib/hooks/use-progress';
 import { useMaterialsProgress, type MaterialProgress } from '@/lib/hooks/use-materials-progress';
@@ -165,6 +166,7 @@ function MaterialCard({
   onDelete: () => void;
 }) {
   const ready = material.status === 'ready';
+  const failed = material.status === 'failed';
   const cover = coverFor(material.id);
 
   return (
@@ -191,10 +193,23 @@ function MaterialCard({
         <p className="text-xs text-ink-muted">
           {ready
             ? `${material.topicCount} topics · ${material.pageCount ?? 0} pages`
-            : (material.processing?.message ?? 'Being prepared')}
+            : failed
+              ? 'Could not be prepared'
+              : 'Being prepared'}
         </p>
 
-        {ready && progress && progress.responseCount > 0 ? (
+        {/*
+          A material that is not ready shows how far ingestion has actually got,
+          rather than a bare "Preparing…" that never moves. The list poll keeps
+          the numbers current until it settles.
+        */}
+        {failed ? (
+          <p className="mt-auto text-xs text-attention">
+            {material.failure?.message ?? 'That file could not be prepared.'}
+          </p>
+        ) : !ready ? (
+          <ProcessingSummary {...progressOf(material)} className="mt-auto" />
+        ) : progress && progress.responseCount > 0 ? (
           <>
             <div className="mt-auto flex items-center gap-2">
               <span className="min-w-0 flex-1">
@@ -211,9 +226,7 @@ function MaterialCard({
             {progress.weakestBand ? <MasteryPill band={progress.weakestBand} /> : null}
           </>
         ) : (
-          <p className="mt-auto text-xs text-ink-subtle">
-            {ready ? 'No answers yet' : 'Preparing…'}
-          </p>
+          <p className="mt-auto text-xs text-ink-subtle">No answers yet</p>
         )}
 
         <Button variant={ready ? 'primary' : 'outline'} size="sm" onClick={onOpen} full>

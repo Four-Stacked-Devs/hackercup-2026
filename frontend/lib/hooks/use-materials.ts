@@ -15,6 +15,20 @@ export function useMaterials() {
   return useQuery({
     queryKey: queryKeys.materials(),
     queryFn: ({ signal }) => listMaterials(signal),
+    /**
+     * Ingestion runs server-side and finishes on its own, so the list keeps
+     * asking while anything is still being prepared. Without this a course sits
+     * on "Preparing…" until the student reloads, and the chat screen never
+     * notices that it may start answering. Settles to no polling once every
+     * material is ready or failed.
+     */
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some(
+        (material) => material.status !== 'ready' && material.status !== 'failed',
+      )
+        ? MATERIAL_STATUS_POLL_MS
+        : false,
+    refetchIntervalInBackground: true,
   });
 }
 

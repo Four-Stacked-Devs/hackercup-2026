@@ -2,35 +2,17 @@
 
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import type { IngestionStage, Material } from '@educlm/contracts';
+import type { Material } from '@educlm/contracts';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Button, ButtonLink } from '@/components/ui/button';
-import { ProgressBar } from '@/components/ui/charts';
 import { ErrorState } from '@/components/ui/states';
 import { AlertIcon, CheckIcon, UploadIcon } from '@/components/ui/icons';
 import { isApiError } from '@/lib/api/client';
-import { API_MODE, DEMO_MATERIAL_ID, MAX_UPLOAD_BYTES } from '@/lib/config';
+import { MAX_UPLOAD_BYTES } from '@/lib/config';
 import { useMaterialStatus, useUploadMaterial } from '@/lib/hooks/use-materials';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
 import { cn } from '@/lib/cn';
-
-/** Plain language for each ingestion stage. No jargon, no spinner-only states. */
-const STAGE_LABEL: Record<IngestionStage, string> = {
-  extracting: 'Reading the pages',
-  chunking: 'Splitting the text into passages',
-  extracting_topics: 'Finding the topics',
-  embedding: 'Indexing it so answers can cite a page',
-  building_lessons: 'Building the accessible lesson',
-  done: 'Ready',
-};
-
-const STAGE_ORDER: IngestionStage[] = [
-  'extracting',
-  'chunking',
-  'extracting_topics',
-  'embedding',
-  'building_lessons',
-];
+import { ProcessingStages, progressOf } from './processing-stages';
 
 export function UploadView({ onRequestClose }: { onRequestClose?: () => void }) {
   const router = useRouter();
@@ -89,7 +71,6 @@ export function UploadView({ onRequestClose }: { onRequestClose?: () => void }) 
                 setMaterial(null);
                 upload.reset();
               }}
-              {...(onRequestClose ? { onNavigate: onRequestClose } : {})}
             />
           ) : ready ? (
             <div>
@@ -122,11 +103,7 @@ export function UploadView({ onRequestClose }: { onRequestClose?: () => void }) 
               </div>
             </div>
           ) : (
-            <ProcessingStages
-              stage={status.data?.processing?.stage ?? 'extracting'}
-              percent={status.data?.processing?.percent ?? 0}
-              message={status.data?.processing?.message ?? STAGE_LABEL.extracting}
-            />
+            <ProcessingStages {...progressOf(status.data)} />
           )}
         </Card>
 
@@ -204,96 +181,10 @@ export function UploadView({ onRequestClose }: { onRequestClose?: () => void }) 
                   : 'That upload did not go through. Try again.'
               }
               onRetry={() => upload.reset()}
-              {...(onRequestClose ? { onNavigate: onRequestClose } : {})}
             />
           </div>
         ) : null}
       </Card>
-
-      {/*
-        Mock mode only: the sample module is a fixture MSW serves to anyone. In
-        live mode it is a real row owned by the seed user, and every browser
-        mints its own device id, so this would route to someone else's material
-        and come back NOT_FOUND.
-      */}
-      {API_MODE === 'mock' ? (
-        <Card>
-          <CardHeader
-            title="No file to hand?"
-            description="Open the sample module and every screen works the same way."
-          />
-          <Button
-            variant="outline"
-            onClick={() => {
-              setMaterialId(DEMO_MATERIAL_ID);
-              onRequestClose?.();
-              router.push(`/study/${DEMO_MATERIAL_ID}`);
-            }}
-          >
-            Use the sample module
-          </Button>
-        </Card>
-      ) : null}
-    </div>
-  );
-}
-
-/** The stages, named as they happen. This is not a spinner. */
-function ProcessingStages({
-  stage,
-  percent,
-  message,
-}: {
-  stage: IngestionStage;
-  percent: number;
-  message: string;
-}) {
-  const currentIndex = STAGE_ORDER.indexOf(stage);
-
-  return (
-    <div>
-      <p className="font-display font-bold text-ink" aria-live="polite">
-        {message}
-      </p>
-
-      <div className="mt-3">
-        <ProgressBar value={percent / 100} label="Preparing your material" />
-      </div>
-      <p className="mt-1.5 text-sm text-ink-muted">
-        {percent}% · usually under a minute for a module this size.
-      </p>
-
-      <ol className="mt-4 m-0 list-none space-y-1.5">
-        {STAGE_ORDER.map((entry, index) => {
-          const done = currentIndex > index;
-          const active = currentIndex === index;
-
-          return (
-            <li
-              key={entry}
-              className={cn(
-                'flex items-center gap-2 text-sm',
-                done ? 'text-ink-muted' : active ? 'font-medium text-ink' : 'text-ink-muted opacity-60',
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
-                  done
-                    ? 'border-strong bg-strong text-white'
-                    : active
-                      ? 'border-nav bg-nav text-white'
-                      : 'border-line',
-                )}
-              >
-                {done ? <CheckIcon width="0.8em" height="0.8em" /> : null}
-              </span>
-              {STAGE_LABEL[entry]}
-            </li>
-          );
-        })}
-      </ol>
     </div>
   );
 }
@@ -303,13 +194,10 @@ function FailureNotice({
   code,
   message,
   onRetry,
-  onNavigate,
 }: {
   code: string;
   message: string;
   onRetry: () => void;
-  /** Set when shown inside the modal, so leaving for the sample closes it. */
-  onNavigate?: () => void;
 }) {
   const advice: Record<string, string> = {
     NO_TEXT_LAYER:
@@ -332,17 +220,6 @@ function FailureNotice({
         <Button variant="outline" size="sm" onClick={onRetry}>
           Try another file
         </Button>
-        {/* Same reason as the card above: reachable in mock mode only. */}
-        {API_MODE === 'mock' ? (
-          <ButtonLink
-            variant="ghost"
-            size="sm"
-            href={`/study/${DEMO_MATERIAL_ID}`}
-            onClick={onNavigate}
-          >
-            Use the sample module instead
-          </ButtonLink>
-        ) : null}
       </div>
     </div>
   );
