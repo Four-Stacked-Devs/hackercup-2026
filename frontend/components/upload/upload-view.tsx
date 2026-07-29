@@ -9,7 +9,7 @@ import { ProgressBar } from '@/components/ui/charts';
 import { ErrorState } from '@/components/ui/states';
 import { AlertIcon, CheckIcon, UploadIcon } from '@/components/ui/icons';
 import { isApiError } from '@/lib/api/client';
-import { DEMO_MATERIAL_ID, MAX_UPLOAD_BYTES } from '@/lib/config';
+import { API_MODE, DEMO_MATERIAL_ID, MAX_UPLOAD_BYTES } from '@/lib/config';
 import { useMaterialStatus, useUploadMaterial } from '@/lib/hooks/use-materials';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
 import { cn } from '@/lib/cn';
@@ -210,22 +210,30 @@ export function UploadView({ onRequestClose }: { onRequestClose?: () => void }) 
         ) : null}
       </Card>
 
-      <Card>
-        <CardHeader
-          title="No file to hand?"
-          description="Open the sample module and every screen works the same way."
-        />
-        <Button
-          variant="outline"
-          onClick={() => {
-            setMaterialId(DEMO_MATERIAL_ID);
-            onRequestClose?.();
-            router.push(`/study/${DEMO_MATERIAL_ID}`);
-          }}
-        >
-          Use the sample module
-        </Button>
-      </Card>
+      {/*
+        Mock mode only: the sample module is a fixture MSW serves to anyone. In
+        live mode it is a real row owned by the seed user, and every browser
+        mints its own device id, so this would route to someone else's material
+        and come back NOT_FOUND.
+      */}
+      {API_MODE === 'mock' ? (
+        <Card>
+          <CardHeader
+            title="No file to hand?"
+            description="Open the sample module and every screen works the same way."
+          />
+          <Button
+            variant="outline"
+            onClick={() => {
+              setMaterialId(DEMO_MATERIAL_ID);
+              onRequestClose?.();
+              router.push(`/study/${DEMO_MATERIAL_ID}`);
+            }}
+          >
+            Use the sample module
+          </Button>
+        </Card>
+      ) : null}
     </div>
   );
 }
@@ -324,14 +332,17 @@ function FailureNotice({
         <Button variant="outline" size="sm" onClick={onRetry}>
           Try another file
         </Button>
-        <ButtonLink
-          variant="ghost"
-          size="sm"
-          href={`/study/${DEMO_MATERIAL_ID}`}
-          onClick={onNavigate}
-        >
-          Use the sample module instead
-        </ButtonLink>
+        {/* Same reason as the card above: reachable in mock mode only. */}
+        {API_MODE === 'mock' ? (
+          <ButtonLink
+            variant="ghost"
+            size="sm"
+            href={`/study/${DEMO_MATERIAL_ID}`}
+            onClick={onNavigate}
+          >
+            Use the sample module instead
+          </ButtonLink>
+        ) : null}
       </div>
     </div>
   );

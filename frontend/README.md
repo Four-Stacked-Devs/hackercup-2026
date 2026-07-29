@@ -29,8 +29,19 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api/v1
 ```
 
 That is the whole change. MSW intercepts at the network layer, so hooks, loading states and error
-handling are identical in both modes. `NEXT_PUBLIC_DEFAULT_DEVICE_ID` defaults to `demo-device`,
-the device the backend seed writes to, so live mode opens on the same demo material.
+handling are identical in both modes.
+
+Identity differs, though. Every browser mints its own `X-Device-Id` on first load, because the API
+scopes materials, chat, progress and plans to that header and has no public read path — a shared
+default would drop every visitor of the deployed app into one account. So live mode opens on an
+empty library and needs a PDF uploaded; the seeded `mat_demo_js` belongs to the seed user, and the
+"sample module" shortcuts are therefore mock-mode only.
+
+### Deployed
+
+`https://hackercup-2026-beryl.vercel.app` reads its env vars from the Vercel dashboard, not from
+any file in this repo. The API it talks to must list that exact origin in the backend's
+`CORS_ORIGIN`; see `backend/render.yaml`.
 
 ## Scripts
 
