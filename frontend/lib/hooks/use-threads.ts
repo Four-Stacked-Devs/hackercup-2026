@@ -66,7 +66,14 @@ export function useThreads(materialId: string | null) {
     threads,
     record,
     recordConversation,
-    isPending: messages.isPending || topics.isPending,
+    /**
+     * `isLoading`, not `isPending`: a disabled query — which is what both of
+     * these are until a material exists — stays `pending` for as long as it is
+     * disabled. Reading that as "still loading" left the rail showing skeleton
+     * rows forever on an empty library, with nothing on the way to replace
+     * them. `isLoading` is pending AND fetching, which is the real thing.
+     */
+    isPending: messages.isLoading || topics.isLoading,
     isError: messages.isError,
     error: messages.error,
     refetch: () => void messages.refetch(),
