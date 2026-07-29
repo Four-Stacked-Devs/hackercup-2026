@@ -280,6 +280,91 @@ export function ProgressRing({
 /** Kept for callers that still name the old ring. */
 export const MasteryRing = ProgressRing;
 
+/**
+ * A donut of named segments — the mastery-band breakdown. Identity is never
+ * color alone: the legend beside it names each segment with its count, and
+ * the hole carries the total.
+ */
+export function SegmentRing({
+  segments,
+  total,
+  caption,
+  size = 132,
+}: {
+  segments: { label: string; count: number; tone: Tone }[];
+  total: number;
+  caption: string;
+  size?: number;
+}) {
+  const stroke = 14;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  /** The 2px-ish surface gap between adjacent fills, in dash units. */
+  const gap = total > 1 ? 3 : 0;
+
+  const visible = segments.filter((segment) => segment.count > 0);
+  let offset = 0;
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      role="img"
+      aria-label={`${caption}: ${visible.map((s) => `${s.count} ${s.label}`).join(', ')}`}
+      className="shrink-0"
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="var(--surface-sunken)"
+        strokeWidth={stroke}
+      />
+      {total > 0
+        ? visible.map((segment) => {
+            const length = Math.max(0, (segment.count / total) * circumference - gap);
+            const dash = `${length} ${circumference - length}`;
+            const rotation = (offset / circumference) * 360 - 90;
+            offset += (segment.count / total) * circumference;
+            return (
+              <circle
+                key={segment.label}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={STROKE_TONE[segment.tone]}
+                strokeWidth={stroke}
+                strokeDasharray={dash}
+                transform={`rotate(${rotation} ${size / 2} ${size / 2})`}
+              />
+            );
+          })
+        : null}
+      <text
+        x="50%"
+        y="47%"
+        textAnchor="middle"
+        className="fill-[var(--ink)] font-bold"
+        style={{ fontSize: size * 0.2 }}
+      >
+        {total}
+      </text>
+      <text
+        x="50%"
+        y="62%"
+        textAnchor="middle"
+        className="fill-[var(--ink-muted)]"
+        style={{ fontSize: size * 0.08 }}
+      >
+        {caption}
+      </text>
+    </svg>
+  );
+}
+
 /** Step dots — "question 4 of 10" as a row you can see at a glance. */
 export function StepProgress({
   total,
