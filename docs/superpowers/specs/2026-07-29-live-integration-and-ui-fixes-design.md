@@ -61,7 +61,7 @@ contract-conformance fixes; deployment.
 - `frontend/lib/threads.ts` title precedence: topic name → recorded derived
   title → `"New chat"`. The `"All messages"` fallback is removed from the
   sidebar row and the workspace header.
-- Pure-function change; unit tests cover derivation, truncation, and fallback.
+- Pure-function change, verified by the manual end-to-end pass (no vitest).
 
 ## 3. Header settings control
 
@@ -80,20 +80,50 @@ contract-conformance fixes; deployment.
 - Persisted in `localStorage`; `aria-expanded` on the toggle; default
   expanded; desktop only (mobile keeps the tab bar).
 
-## Error handling
+## 5. New UI (from the provided mockups)
 
-- Live-mode API failures surface through the existing error paths
-  (`apiRequest` envelope parsing, chat stream `onError`); no new error UI.
-- If the backend is down, the health check turns the header pill offline;
-  screens show their existing error states. No silent fallback to mock.
+Restyle the app to the mockup design — desktop and mobile — across the five
+screens: Chat/Home, Course Explorer, Learning Plan, Analytics, Progress.
+
+- **Real data only.** Elements with no backing in the API contract are
+  dropped, not faked: course ratings, student counts, streaks, study-time
+  totals/trend, mic and camera composer buttons. Everything rendered comes
+  from the live endpoints (mastery, plan, findings, accuracy trend, chat).
+- Chat/Home: mascot greeting block ("Hi {displayName}"), user bubbles right /
+  assistant rows left, action chips under answers, thread history in the
+  sidebar with per-thread titles, share/… header actions only where they have
+  behavior (otherwise omitted).
+- Course Explorer: material cards grid built from `GET /materials` +
+  `/topics` (title, topic count, progress from mastery); no fake catalog.
+- Learning Plan: plan overview header (goal = material title, overall
+  progress ring computed from step completion), weekly-style step list from
+  `GET /plan`, "Up next" card from `currentStepId`.
+- Analytics: new screen fed entirely by `GET /progress/overview` — accuracy
+  stat tiles, trend chart from `trend.points`, weak topics from
+  `masteryByTopic` (needs_attention first), topic mastery donut/bars.
+- Progress: overall progress, milestones from plan adaptations/completions,
+  mastery-by-topic bars, EDU recommendation card from `topFinding`.
+- Mobile: bottom tab bar becomes Home / Explore / Plan / Analytics /
+  Progress, matching the mockups.
+- Sidebar (desktop): dark rail per mockup with New Chat, five nav items,
+  searchable chat history, account row — collapse per section 4.
+
+## Error handling and loading
+
+- **Backend down → skeleton UI.** Every screen renders skeleton placeholders
+  (shimmering blocks matching its layout) while queries are pending; if the
+  API is unreachable, screens stay in skeleton state with a quiet "Trying to
+  reconnect" note and the header pill shows offline. React Query retries in
+  the background and the screen hydrates when the API returns. No hard error
+  walls, no silent fallback to mock.
+- Chat send failures keep the existing inline error path.
 
 ## Testing
 
-- Unit: new tests for title derivation in `threads.ts`/`thread-index.ts`;
-  existing frontend vitest suite; backend analytics suite untouched but run.
-- Static: `npm run typecheck` (frontend), backend build.
-- End-to-end: manual drive of the full verification matrix against the
-  running pair (frontend :3000, API :4000), including one real PDF upload.
+- No vitest. Verification is: `npm run typecheck` (frontend), backend build,
+  and a manual end-to-end drive of the full verification matrix against the
+  running pair (frontend :3000, API :4000), including one real PDF upload,
+  plus a backend-stopped pass to confirm every screen shows skeletons.
 
 ## Done means
 
@@ -102,4 +132,6 @@ contract-conformance fixes; deployment.
 - [ ] New conversations titled from the first message; no "All messages"
 - [ ] Header has one standard settings popover persisting via PATCH /me/preferences
 - [ ] Sidebar collapse toggles, persists, and is accessible
-- [ ] Typecheck and both test suites pass
+- [ ] All five screens match the new mockups, desktop and mobile, real data only
+- [ ] With the backend stopped, every screen shows skeleton UI, not errors
+- [ ] Typecheck passes; manual matrix verified
