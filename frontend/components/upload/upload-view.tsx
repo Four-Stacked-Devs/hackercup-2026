@@ -32,7 +32,7 @@ const STAGE_ORDER: IngestionStage[] = [
   'building_lessons',
 ];
 
-export function UploadView() {
+export function UploadView({ onRequestClose }: { onRequestClose?: () => void }) {
   const router = useRouter();
   const upload = useUploadMaterial();
   const { setMaterialId } = useCurrentMaterial();
@@ -89,6 +89,7 @@ export function UploadView() {
                 setMaterial(null);
                 upload.reset();
               }}
+              {...(onRequestClose ? { onNavigate: onRequestClose } : {})}
             />
           ) : ready ? (
             <div>
@@ -100,12 +101,24 @@ export function UploadView() {
                 {material.title} is now a lesson you can read, question and practise.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button variant="primary" onClick={() => router.push(`/study/${material.id}`)}>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    onRequestClose?.();
+                    router.push(`/study/${material.id}`);
+                  }}
+                >
                   Open the lesson
                 </Button>
-                <ButtonLink variant="outline" href="/">
-                  Back to the agent
-                </ButtonLink>
+                {onRequestClose ? (
+                  <Button variant="outline" onClick={onRequestClose}>
+                    Done
+                  </Button>
+                ) : (
+                  <ButtonLink variant="outline" href="/">
+                    Back to the agent
+                  </ButtonLink>
+                )}
               </div>
             </div>
           ) : (
@@ -191,6 +204,7 @@ export function UploadView() {
                   : 'That upload did not go through. Try again.'
               }
               onRetry={() => upload.reset()}
+              {...(onRequestClose ? { onNavigate: onRequestClose } : {})}
             />
           </div>
         ) : null}
@@ -205,6 +219,7 @@ export function UploadView() {
           variant="outline"
           onClick={() => {
             setMaterialId(DEMO_MATERIAL_ID);
+            onRequestClose?.();
             router.push(`/study/${DEMO_MATERIAL_ID}`);
           }}
         >
@@ -280,10 +295,13 @@ function FailureNotice({
   code,
   message,
   onRetry,
+  onNavigate,
 }: {
   code: string;
   message: string;
   onRetry: () => void;
+  /** Set when shown inside the modal, so leaving for the sample closes it. */
+  onNavigate?: () => void;
 }) {
   const advice: Record<string, string> = {
     NO_TEXT_LAYER:
@@ -306,7 +324,12 @@ function FailureNotice({
         <Button variant="outline" size="sm" onClick={onRetry}>
           Try another file
         </Button>
-        <ButtonLink variant="ghost" size="sm" href={`/study/${DEMO_MATERIAL_ID}`}>
+        <ButtonLink
+          variant="ghost"
+          size="sm"
+          href={`/study/${DEMO_MATERIAL_ID}`}
+          onClick={onNavigate}
+        >
           Use the sample module instead
         </ButtonLink>
       </div>

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { AttachIcon, ChevronDownIcon, PlusIcon, SendIcon } from '@/components/ui/icons';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
+import { useUploadDialog } from '@/components/upload/upload-dialog';
 import { useTopics } from '@/lib/hooks/use-study';
 
 /**
@@ -35,6 +35,7 @@ export function Composer({
 }) {
   const [value, setValue] = useState('');
   const { material, materials, setMaterialId } = useCurrentMaterial();
+  const { openUpload } = useUploadDialog();
   const topics = useTopics(showContext ? (material?.id ?? null) : null);
 
   const submit = (event: FormEvent) => {
@@ -68,25 +69,25 @@ export function Composer({
         />
 
         <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pt-1">
-          <Link
-            href="/upload"
-            prefetch={false}
+          <button
+            type="button"
+            onClick={openUpload}
             aria-label="Add a material"
             title="Add a material"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
           >
             <PlusIcon />
-          </Link>
+          </button>
 
-          <Link
-            href="/upload"
-            prefetch={false}
+          <button
+            type="button"
+            onClick={openUpload}
             aria-label="Attach a PDF"
             title="Attach a PDF"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
           >
             <AttachIcon />
-          </Link>
+          </button>
 
           {showContext && materials.length > 0 ? (
             <>

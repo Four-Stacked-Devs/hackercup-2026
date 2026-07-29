@@ -3,13 +3,14 @@
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
-import { ButtonLink } from '@/components/ui/button';
+import { Button, ButtonLink } from '@/components/ui/button';
 import { ErrorState, ScreenSkeleton } from '@/components/ui/states';
 import { PlanIcon, UploadIcon } from '@/components/ui/icons';
 import { EduMascot } from '@/components/brand/edu-mascot';
 import { WorkspaceHeader } from '@/components/shell/workspace-header';
 import { SourceProvider } from '@/components/source/source-sheet';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
+import { useUploadDialog } from '@/components/upload/upload-dialog';
 import { useChatStream } from '@/lib/hooks/use-study';
 import { useThreads } from '@/lib/hooks/use-threads';
 import { findThread } from '@/lib/threads';
@@ -52,8 +53,8 @@ export function AgentWorkspace() {
               <p className="text-sm text-ink">
                 EDU is still reading {material.title}. The agent can answer once it is ready.
               </p>
-              <ButtonLink variant="outline" size="sm" className="mt-3" href="/upload">
-                Watch it being prepared
+              <ButtonLink variant="outline" size="sm" className="mt-3" href="/materials">
+                See its progress
               </ButtonLink>
             </Card>
           </div>
@@ -140,6 +141,8 @@ function ConversationColumn({
 
 /** Nothing uploaded yet: an invitation, not a shrug. */
 function FirstRun() {
+  const { openUpload } = useUploadDialog();
+
   return (
     <>
       <WorkspaceHeader title="EducLM" subtitle="One agent. Your goals. Every step." />
@@ -155,10 +158,10 @@ function FirstRun() {
           </p>
 
           <div className="mt-5 grid gap-2 text-left">
-            <ButtonLink href="/upload" variant="primary" size="lg" full>
+            <Button variant="primary" size="lg" full onClick={openUpload}>
               <UploadIcon />
               Upload material and build a study plan
-            </ButtonLink>
+            </Button>
             <ButtonLink href="/materials" variant="outline" size="lg" full>
               <PlanIcon />
               Open the sample module

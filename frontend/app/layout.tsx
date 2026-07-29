@@ -5,6 +5,7 @@ import { QueryProvider } from '@/components/providers/query-provider';
 import { MockProvider } from '@/components/providers/mock-provider';
 import { PreferencesProvider } from '@/components/providers/preferences-provider';
 import { MaterialProvider } from '@/components/providers/material-provider';
+import { UploadDialogProvider } from '@/components/upload/upload-dialog';
 import { AppShell } from '@/components/shell/app-shell';
 
 const display = Plus_Jakarta_Sans({
@@ -39,7 +40,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <QueryProvider>
             <PreferencesProvider>
               <MaterialProvider>
-                <AppShell>{children}</AppShell>
+                <UploadDialogProvider>
+                  <AppShell>{children}</AppShell>
+                </UploadDialogProvider>
               </MaterialProvider>
             </PreferencesProvider>
           </QueryProvider>

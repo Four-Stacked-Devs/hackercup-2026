@@ -56,6 +56,7 @@ export function ButtonLink({
   className,
   children,
   prefetch,
+  onClick,
 }: {
   href: string;
   variant?: Variant;
@@ -64,11 +65,14 @@ export function ButtonLink({
   className?: string;
   children: ReactNode;
   prefetch?: boolean;
+  /** Runs alongside the navigation, e.g. to close the dialog the link is in. */
+  onClick?: () => void;
 }) {
   return (
     <Link
       href={href}
       prefetch={prefetch ?? false}
+      onClick={onClick}
       className={cn(BASE, VARIANTS[variant], SIZES[size], full && 'w-full', className)}
     >
       {children}

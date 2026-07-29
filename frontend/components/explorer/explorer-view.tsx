@@ -14,6 +14,7 @@ import { EmptyState, ErrorState, ScreenSkeleton } from '@/components/ui/states';
 import { DocIcon, SearchIcon, TrashIcon, UploadIcon } from '@/components/ui/icons';
 import { EduMascot } from '@/components/brand/edu-mascot';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
+import { useUploadDialog } from '@/components/upload/upload-dialog';
 import { useDeleteMaterial } from '@/lib/hooks/use-materials';
 import { useProgressOverview } from '@/lib/hooks/use-progress';
 import { useMaterialsProgress, type MaterialProgress } from '@/lib/hooks/use-materials-progress';
@@ -34,6 +35,7 @@ export function ExplorerView() {
   const [query, setQuery] = useState('');
   const remove = useDeleteMaterial();
   const router = useRouter();
+  const { openUpload } = useUploadDialog();
   const progress = useMaterialsProgress(materials);
 
   const needle = query.trim().toLowerCase();
@@ -52,10 +54,10 @@ export function ExplorerView() {
         title="Explore Courses"
         subtitle="Your materials, their skills, and how far you have got"
         actions={
-          <ButtonLink href="/upload" variant="primary" size="sm">
+          <Button variant="primary" size="sm" onClick={openUpload}>
             <UploadIcon />
             Add material
-          </ButtonLink>
+          </Button>
         }
       />
 
@@ -70,9 +72,9 @@ export function ExplorerView() {
             title="Nothing here yet"
             description="Add a PDF module and it becomes a lesson you can read, question and practise."
             action={
-              <ButtonLink href="/upload" variant="primary">
+              <Button variant="primary" onClick={openUpload}>
                 Add your first material
-              </ButtonLink>
+              </Button>
             }
           />
         ) : (
