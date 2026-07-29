@@ -11,6 +11,18 @@ import {
 } from '../api/endpoints';
 import { queryKeys } from '../query-keys';
 
+/**
+ * The list polls at half the rate of the single-material status endpoint.
+ *
+ * `MATERIAL_STATUS_POLL_MS` is what the contract prescribes for watching one
+ * material closely; the whole list only feeds a card's progress bar and does not
+ * need that cadence. It matters because the API rate-limits per device, and
+ * during ingestion this poll would otherwise run alongside the status poll and
+ * eat most of the budget — a rejected request there fails the queries the rail
+ * depends on.
+ */
+const MATERIAL_LIST_POLL_MS = MATERIAL_STATUS_POLL_MS * 2;
+
 export function useMaterials() {
   return useQuery({
     queryKey: queryKeys.materials(),
@@ -26,7 +38,7 @@ export function useMaterials() {
       (query.state.data ?? []).some(
         (material) => material.status !== 'ready' && material.status !== 'failed',
       )
-        ? MATERIAL_STATUS_POLL_MS
+        ? MATERIAL_LIST_POLL_MS
         : false,
     refetchIntervalInBackground: true,
   });
