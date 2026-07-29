@@ -76,19 +76,31 @@ function ConversationColumn({
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTopicId = searchParams.get('topic');
+  // Plain `/` is a fresh start — the logo and New Chat always land on the
+  // greeting. The untopiced conversation lives at `/?thread=all`.
+  const showUngrouped = searchParams.get('thread') === 'all';
 
   const { threads, record, isPending, isError, error, refetch } = useThreads(materialId);
-  const thread = findThread(threads, activeTopicId);
+  const thread = activeTopicId
+    ? findThread(threads, activeTopicId)
+    : showUngrouped
+      ? findThread(threads, null)
+      : undefined;
 
   const stream = useChatStream(materialId, {
     onAssistantMessage: useCallback(
-      (message: { id: string }, topicId: string | null) => record(topicId, [message.id]),
-      [record],
+      (message: { id: string }, topicId: string | null) => {
+        record(topicId, [message.id]);
+        // A first message sent from the fresh home belongs to the untopiced
+        // thread; follow it there so the settled answer stays on screen.
+        if (!topicId) router.replace('/?thread=all');
+      },
+      [record, router],
     ),
   });
 
   const setTopic = (topicId: string | null) =>
-    router.replace(topicId ? `/?topic=${topicId}` : '/');
+    router.replace(topicId ? `/?topic=${topicId}` : '/?thread=all');
 
   const messages = thread?.messages ?? [];
   const lastIsAnswer = messages[messages.length - 1]?.role === 'assistant';

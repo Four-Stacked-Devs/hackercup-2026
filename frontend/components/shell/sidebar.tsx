@@ -117,6 +117,7 @@ export function Sidebar() {
   };
 
   const activeTopicId = pathname === '/' ? searchParams.get('topic') : null;
+  const ungroupedOpen = pathname === '/' && searchParams.get('thread') === 'all';
 
   const toggle = (
     <button
@@ -187,7 +188,12 @@ export function Sidebar() {
       {collapsed ? (
         <div className="min-h-0 flex-1" />
       ) : (
-        <ThreadList threads={threads} activeTopicId={activeTopicId} isPending={isPending} />
+        <ThreadList
+          threads={threads}
+          activeTopicId={activeTopicId}
+          ungroupedOpen={ungroupedOpen}
+          isPending={isPending}
+        />
       )}
 
       <div className="mt-2 border-t border-white/10 pt-2.5">

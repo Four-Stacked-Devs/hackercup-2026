@@ -9,8 +9,10 @@ import { SearchIcon } from '@/components/ui/icons';
 
 interface ThreadListProps {
   threads: readonly ChatThread[];
-  /** The topic currently open in the workspace, or null for the ungrouped thread. */
+  /** The topic currently open in the workspace, if any. */
   activeTopicId: string | null;
+  /** Whether the untopiced thread (`/?thread=all`) is the one open. */
+  ungroupedOpen: boolean;
   isPending: boolean;
 }
 
@@ -21,7 +23,7 @@ interface ThreadListProps {
  * recorded locally (see `lib/thread-index.ts`), so anything this browser did
  * not send appears in the ungrouped thread rather than being dropped.
  */
-export function ThreadList({ threads, activeTopicId, isPending }: ThreadListProps) {
+export function ThreadList({ threads, activeTopicId, ungroupedOpen, isPending }: ThreadListProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -84,9 +86,11 @@ export function ThreadList({ threads, activeTopicId, isPending }: ThreadListProp
                   <ThreadRow
                     key={thread.key}
                     thread={thread}
-                    active={thread.topicId === activeTopicId}
+                    active={
+                      thread.topicId ? thread.topicId === activeTopicId : ungroupedOpen
+                    }
                     onOpen={() =>
-                      router.push(thread.topicId ? `/?topic=${thread.topicId}` : '/')
+                      router.push(thread.topicId ? `/?topic=${thread.topicId}` : '/?thread=all')
                     }
                   />
                 ))}
