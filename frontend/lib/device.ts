@@ -23,7 +23,12 @@ export function getDeviceId(): string {
   if (typeof window === 'undefined') return DEFAULT_DEVICE_ID;
 
   const existing = window.localStorage.getItem(STORAGE_KEY);
-  if (existing) return existing;
+
+  // An id equal to the shared default was written by an earlier build, when
+  // every browser started as the seeded demo student. Keeping it would open the
+  // app on someone else's library — the seed's material — instead of a clean
+  // slate, so it is rotated once, here, rather than left to linger.
+  if (existing && existing !== DEFAULT_DEVICE_ID) return existing;
 
   const fresh = mintDeviceId();
   window.localStorage.setItem(STORAGE_KEY, fresh);

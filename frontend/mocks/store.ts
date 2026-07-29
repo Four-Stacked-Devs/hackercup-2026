@@ -148,20 +148,6 @@ interface MockState {
   setSeq: number;
 }
 
-function seededMaterial(): Material {
-  return {
-    id: MATERIAL_ID,
-    title: SEED.material.title,
-    originalFilename: SEED.material.filename,
-    status: 'ready',
-    pageCount: SEED.material.pageCount,
-    topicCount: SEED.topics.length,
-    processing: null,
-    failure: null,
-    createdAt: daysAgo(5).toISOString(),
-    updatedAt: daysAgo(5).toISOString(),
-  };
-}
 
 /** The seed's answer history, response for response. */
 const HISTORY: {
@@ -397,7 +383,10 @@ function initialState(): MockState {
       : [];
 
   return {
-    materials: [seededMaterial()],
+    // The library starts empty so the app opens on its invitation to add a
+    // PDF, rather than on someone else's sample. The seeded content and history
+    // below are still here — whatever is uploaded resolves to them.
+    materials: [],
     uploads: new Map(),
     responses,
     practiceSets: sets,
@@ -461,9 +450,16 @@ export function topicMasteryFor(topicId: string): TopicMastery | null {
   return { topicId, topicName: topic.name, ...computed };
 }
 
+/**
+ * The sample topics, under whichever material asked for them.
+ *
+ * The mock holds one body of content and one history; every other lookup here
+ * (lesson, pages, plan, progress) is already global. Gating only this one on the
+ * seed's id made an uploaded material come back with no topics at all — a ready
+ * course with nothing in it. Answering for any id is what lets the library start
+ * empty and a file you add behave like a real one.
+ */
 export function listTopics(materialId: string): Topic[] {
-  if (materialId !== MATERIAL_ID) return [];
-
   return SEED.topics.map((topic, orderIndex) => ({
     id: topic.id,
     materialId,
@@ -711,11 +707,14 @@ export function deleteMaterial(id: string): boolean {
   if (index === -1) return false;
   state.materials.splice(index, 1);
   state.uploads.delete(id);
-  if (id === MATERIAL_ID) {
-    state.responses = [];
-    state.findings = [];
-    state.practiceSets.clear();
-  }
+
+  // One body of history, so deleting whichever material was holding it clears
+  // it. Previously this only fired for the seed's id, which left an uploaded
+  // material's answers behind after it was removed.
+  state.responses = [];
+  state.findings = [];
+  state.practiceSets.clear();
+
   return true;
 }
 

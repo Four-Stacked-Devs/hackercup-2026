@@ -25,9 +25,20 @@ describe('mock fixtures satisfy the published contracts', () => {
   beforeEach(() => store.resetStore());
 
   it('materials', () => {
-    for (const material of store.listMaterials()) {
+    // The library starts empty, so the shape worth checking is the one an
+    // upload produces — which is now the only material a student can have.
+    store.startUpload('photosynthesis.pdf', null, false);
+
+    const materials = store.listMaterials();
+    expect(materials.length).toBeGreaterThan(0);
+    for (const material of materials) {
       expect(() => materialSchema.parse(material)).not.toThrow();
     }
+  });
+
+  it('an uploaded material resolves to real topics', () => {
+    const uploaded = store.startUpload('photosynthesis.pdf', null, false);
+    expect(store.listTopics(uploaded.id).length).toBeGreaterThan(0);
   });
 
   it('topics carry mastery in the contract shape', () => {
