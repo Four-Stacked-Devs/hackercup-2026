@@ -33,7 +33,7 @@ export function ThreadList({ threads, activeTopicId, isPending }: ThreadListProp
     <div className="mt-5 flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-2 px-2.5 pb-1.5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-nav-ink-muted">
-          Chats
+          Chat History
         </h2>
         <button
           type="button"

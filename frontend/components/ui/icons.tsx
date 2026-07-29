@@ -95,6 +95,12 @@ export const ProgressIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const AnalyticsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 20v-8M12 20V5M19 20v-5" />
+  </Icon>
+);
+
 export const ProfileIcon = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="12" cy="8.5" r="3.5" />
@@ -283,6 +289,61 @@ export const RefreshIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M20 11a8 8 0 1 0-.7 4.3" />
     <path d="M20 5v6h-6" />
+  </Icon>
+);
+
+export const SearchIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M16 16l4 4" />
+  </Icon>
+);
+
+/** Course Explorer: a compass, for finding your way around a material. */
+export const CompassIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M15.2 8.8l-1.8 4.4-4.4 1.8 1.8-4.4z" />
+  </Icon>
+);
+
+export const ChevronDownIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 9.5l6 6 6-6" />
+  </Icon>
+);
+
+export const ChevronRightIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9.5 6l6 6-6 6" />
+  </Icon>
+);
+
+export const CollapseIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M13 6l-6 6 6 6M19 6l-6 6 6 6" />
+  </Icon>
+);
+
+export const QuizIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="4" y="3.5" width="16" height="17" rx="2" />
+    <path d="M9 9h6M9 13h6M9 17h3" />
+  </Icon>
+);
+
+export const SimplifyIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.3 9.6a2.7 2.7 0 1 1 3.4 3.1v1.1" />
+    <circle cx="12" cy="17" r="0.9" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+export const ExamplesIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M10.2 8.8l5 3.2-5 3.2z" />
   </Icon>
 );
 

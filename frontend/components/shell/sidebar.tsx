@@ -1,16 +1,18 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/cn';
-import { queryKeys } from '@/lib/query-keys';
-import { clearChat } from '@/lib/api/endpoints';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
 import { usePreferences } from '@/components/providers/preferences-provider';
+import { useThreads } from '@/lib/hooks/use-threads';
 import { EduMascot } from '@/components/brand/edu-mascot';
-import { BellIcon, HelpIcon, PlusIcon, ProfileIcon, SettingsIcon } from '@/components/ui/icons';
+import { ChevronDownIcon, CollapseIcon, PlusIcon } from '@/components/ui/icons';
 import { railNav, type NavItem } from './nav-items';
+import { ThreadList } from './thread-list';
+
+const COLLAPSED_KEY = 'educlm.sidebar-collapsed';
 
 function isActive(pathname: string, href: string): boolean {
   if (href === '/') return pathname === '/';
@@ -20,7 +22,15 @@ function isActive(pathname: string, href: string): boolean {
 
 const ROW = 'flex min-h-10 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors';
 
-function NavRow({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavRow({
+  item,
+  pathname,
+  collapsed,
+}: {
+  item: NavItem;
+  pathname: string;
+  collapsed: boolean;
+}) {
   const Icon = item.icon;
 
   if (!item.href) {
@@ -31,10 +41,14 @@ function NavRow({ item, pathname }: { item: NavItem; pathname: string }) {
           disabled
           aria-disabled="true"
           title={`${item.label} — ${item.unavailableReason ?? 'not in this build'}`}
-          className={cn(ROW, 'w-full cursor-not-allowed text-left text-nav-ink-muted opacity-60')}
+          className={cn(
+            ROW,
+            'w-full cursor-not-allowed text-left text-nav-ink-muted opacity-60',
+            collapsed && 'justify-center px-0',
+          )}
         >
           <Icon />
-          <span className="truncate">{item.label}</span>
+          {collapsed ? null : <span className="truncate">{item.label}</span>}
           <span className="sr-only"> — not in this build</span>
         </button>
       </li>
@@ -49,130 +63,163 @@ function NavRow({ item, pathname }: { item: NavItem; pathname: string }) {
         href={item.href}
         prefetch={false}
         aria-current={active ? 'page' : undefined}
+        title={collapsed ? item.label : undefined}
         className={cn(
           ROW,
-          active
-            ? 'bg-lime font-semibold text-lime-ink'
-            : 'text-nav-ink hover:bg-nav-raised',
+          active ? 'bg-lime font-semibold text-lime-ink' : 'text-nav-ink hover:bg-nav-raised',
+          collapsed && 'justify-center px-0',
         )}
       >
         <Icon />
-        <span className="truncate">{item.label}</span>
+        {collapsed ? null : <span className="truncate">{item.label}</span>}
+        {collapsed ? <span className="sr-only">{item.label}</span> : null}
       </Link>
     </li>
   );
 }
 
-/** The fixed rail: brand, one primary action, the modules, then the account. */
+/**
+ * The rail: brand, the New Chat action, the four destinations, the
+ * conversation history, then the account row pinned to the bottom.
+ *
+ * Collapsing folds it to an icon rail. The choice is per-browser and cosmetic,
+ * so it lives in localStorage and is read after mount — the first paint is
+ * always expanded, which keeps server and client markup identical.
+ */
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
   const { materialId } = useCurrentMaterial();
   const { displayName } = usePreferences();
+  const { threads, isPending } = useThreads(materialId);
 
-  async function startNewChat() {
-    if (materialId) {
-      await clearChat(materialId).catch(() => undefined);
-      queryClient.setQueryData(queryKeys.chat(materialId), []);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(COLLAPSED_KEY) === '1');
+    } catch {
+      // Unavailable storage just means the rail starts expanded.
     }
-    router.push('/');
-  }
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        // Not persisting is fine; the toggle still works for the session.
+      }
+      return next;
+    });
+  };
+
+  const activeTopicId = pathname === '/' ? searchParams.get('topic') : null;
+
+  const toggle = (
+    <button
+      type="button"
+      onClick={toggleCollapsed}
+      aria-expanded={!collapsed}
+      title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      className="rounded-sm p-1 text-nav-ink-muted transition-colors hover:bg-nav-raised hover:text-nav-ink"
+    >
+      <CollapseIcon className={cn('transition-transform', collapsed && 'rotate-180')} />
+      <span className="sr-only">{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</span>
+    </button>
+  );
 
   return (
     <nav
       data-nav
       aria-label="Main"
-      className="hidden w-[216px] shrink-0 flex-col overflow-y-auto overflow-x-hidden bg-nav px-2.5 py-3.5 lg:flex"
+      className={cn(
+        'hidden shrink-0 flex-col overflow-hidden bg-nav py-3.5 transition-[width] duration-200 lg:flex',
+        collapsed ? 'w-16 px-2' : 'w-[256px] px-2.5',
+      )}
     >
-      <Link href="/" prefetch={false} className="mb-4 flex items-center gap-2 px-1.5 py-1">
-        <EduMascot size={28} eager />
-        <span className="font-display text-lg font-extrabold tracking-tight text-white">
-          Educ<span className="text-lime">LM</span>
-        </span>
-      </Link>
+      {collapsed ? (
+        <div className="mb-4 flex flex-col items-center gap-2">
+          <Link href="/" prefetch={false} title="EducLM home" className="py-1">
+            <EduMascot size={26} eager />
+            <span className="sr-only">EducLM home</span>
+          </Link>
+          {toggle}
+        </div>
+      ) : (
+        <div className="mb-4 flex items-center justify-between gap-2 px-1.5">
+          <Link href="/" prefetch={false} className="flex items-center gap-2 py-1">
+            <EduMascot size={26} eager />
+            <span className="font-display text-lg font-extrabold tracking-tight text-white">
+              Educ<span className="text-lime">LM</span>
+            </span>
+          </Link>
+          {toggle}
+        </div>
+      )}
 
+      {/*
+        New Chat clears only the client's idea of which thread is open. It does
+        not call DELETE /chat: the log is the student's history, and starting a
+        new conversation is not a request to erase the old one.
+      */}
       <button
         type="button"
-        onClick={() => void startNewChat()}
-        className="mb-4 flex min-h-10 w-full items-center gap-2 rounded-md bg-lime px-2.5 text-sm font-semibold text-lime-ink transition-colors hover:bg-lime-strong"
+        onClick={() => router.push('/')}
+        title={collapsed ? 'New Chat' : undefined}
+        className={cn(
+          'flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-lime text-sm font-semibold text-lime-ink transition-colors hover:bg-lime-strong',
+          collapsed ? 'px-0' : 'px-2.5',
+        )}
       >
         <PlusIcon />
-        New chat
+        {collapsed ? <span className="sr-only">New Chat</span> : 'New Chat'}
       </button>
 
-      <ul className="flex flex-col gap-0.5">
+      <ul className="mt-4 flex flex-col gap-0.5">
         {railNav(materialId).map((item) => (
-          <NavRow key={item.key} item={item} pathname={pathname} />
+          <NavRow key={item.key} item={item} pathname={pathname} collapsed={collapsed} />
         ))}
       </ul>
 
-      <div className="mt-auto flex flex-col gap-0.5 border-t border-white/10 pt-2.5">
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          title="Learning profile — not in this build"
-          className={cn(ROW, 'cursor-not-allowed text-left text-nav-ink-muted opacity-60')}
-        >
-          <ProfileIcon />
-          Learning profile
-          <span className="sr-only"> — not in this build</span>
-        </button>
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          title="Notifications — not in this build"
-          className={cn(ROW, 'cursor-not-allowed text-left text-nav-ink-muted opacity-60')}
-        >
-          <BellIcon />
-          Notifications
-          <span className="sr-only"> — not in this build</span>
-        </button>
-        <Link
-          href="/about/ai-use"
-          prefetch={false}
-          aria-current={isActive(pathname, '/about/ai-use') ? 'page' : undefined}
-          className={cn(
-            ROW,
-            isActive(pathname, '/about/ai-use')
-              ? 'bg-lime font-semibold text-lime-ink'
-              : 'text-nav-ink hover:bg-nav-raised',
-          )}
-        >
-          <HelpIcon />
-          How EducLM uses AI
-        </Link>
+      {collapsed ? (
+        <div className="min-h-0 flex-1" />
+      ) : (
+        <ThreadList threads={threads} activeTopicId={activeTopicId} isPending={isPending} />
+      )}
+
+      <div className="mt-2 border-t border-white/10 pt-2.5">
         <Link
           href="/settings"
           prefetch={false}
-          aria-current={isActive(pathname, '/settings') ? 'page' : undefined}
+          title={collapsed ? 'Settings' : undefined}
           className={cn(
-            ROW,
-            isActive(pathname, '/settings')
-              ? 'bg-lime font-semibold text-lime-ink'
-              : 'text-nav-ink hover:bg-nav-raised',
+            'flex w-full items-center gap-2.5 rounded-md transition-colors hover:bg-white/15',
+            collapsed ? 'justify-center py-1.5' : 'bg-nav-raised px-2.5 py-2 text-left',
           )}
         >
-          <SettingsIcon />
-          Settings
-        </Link>
-
-        <div className="mt-1.5 flex items-center gap-2.5 rounded-md bg-nav-raised px-2.5 py-2">
           <span
             aria-hidden="true"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime text-xs font-bold text-lime-ink"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-xs font-bold text-lime-ink"
           >
-            {(displayName ?? 'S').slice(0, 1)}
+            {(displayName ?? 'S').slice(0, 1).toUpperCase()}
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-white">
-              {displayName ?? 'Student'}
-            </span>
-            <span className="block text-xs text-nav-ink-muted">Anonymous device</span>
-          </span>
-        </div>
+          {collapsed ? (
+            <span className="sr-only">{displayName ?? 'Student'} — Settings</span>
+          ) : (
+            <>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-white">
+                  {displayName ?? 'Student'}
+                </span>
+                <span className="block text-xs text-nav-ink-muted">Anonymous device</span>
+              </span>
+              <ChevronDownIcon className="shrink-0 text-nav-ink-muted" />
+            </>
+          )}
+        </Link>
       </div>
     </nav>
   );
