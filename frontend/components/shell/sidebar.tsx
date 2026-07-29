@@ -92,7 +92,7 @@ export function Sidebar() {
   const searchParams = useSearchParams();
   const { materialId } = useCurrentMaterial();
   const { displayName } = usePreferences();
-  const { threads, isPending } = useThreads(materialId);
+  const { threads, isPending, isError, refetch } = useThreads(materialId);
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -197,6 +197,9 @@ export function Sidebar() {
           activeThreadKey={activeThreadKey}
           ungroupedOpen={ungroupedOpen}
           isPending={isPending}
+          isError={isError}
+          onRetry={refetch}
+          hasMaterial={materialId !== null}
         />
       )}
 

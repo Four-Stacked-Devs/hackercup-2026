@@ -16,6 +16,11 @@ interface ThreadListProps {
   /** Whether the untopiced thread (`/?thread=all`) is the one open. */
   ungroupedOpen: boolean;
   isPending: boolean;
+  /** The conversation log could not be loaded. */
+  isError?: boolean;
+  onRetry?: () => void;
+  /** False when no material is selected, so there is nothing to have chats in. */
+  hasMaterial?: boolean;
 }
 
 /** Topic threads open by topic; conversations by their own key. */
@@ -38,6 +43,9 @@ export function ThreadList({
   activeThreadKey = null,
   ungroupedOpen,
   isPending,
+  isError = false,
+  onRetry,
+  hasMaterial = true,
 }: ThreadListProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -84,11 +92,33 @@ export function ThreadList({
               <li key={row} className="h-8 animate-pulse rounded-md bg-nav-raised" />
             ))}
           </ul>
+        ) : isError ? (
+          /*
+            A failed log used to fall through to "No conversations yet", which
+            reads as "you have never chatted" when the truth is that the request
+            did not come back. Losing history is alarming; say what happened.
+          */
+          <div className="px-2.5 py-2">
+            <p className="text-xs leading-relaxed text-nav-ink-muted">
+              Your chats could not be loaded. They are safe on the server.
+            </p>
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-1.5 rounded-sm text-xs font-semibold text-lime underline-offset-2 hover:underline"
+              >
+                Try again
+              </button>
+            ) : null}
+          </div>
         ) : groups.length === 0 ? (
           <p className="px-2.5 py-2 text-xs leading-relaxed text-nav-ink-muted">
             {query
               ? 'No chats match that search.'
-              : 'No conversations yet. Ask EDU something to start one.'}
+              : hasMaterial
+                ? 'No conversations yet. Ask EDU something to start one.'
+                : 'Add a PDF to start your first conversation.'}
           </p>
         ) : (
           groups.map((group) => (
