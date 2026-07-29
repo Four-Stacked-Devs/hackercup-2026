@@ -71,26 +71,26 @@ export function WorkspaceHeader({
   );
 }
 
+/**
+ * Only speaks up when the API cannot be reached.
+ *
+ * A permanent "Agent online" pill restates the normal case on every screen; the
+ * information a student can act on is the failure, so that is all this renders.
+ * `isLoading` stays silent too — a pill that flickers on every navigation reads
+ * as a fault rather than as a check.
+ */
 export function AgentStatus() {
-  const { isError, isLoading } = useHealth();
+  const { isError } = useHealth();
 
-  const label = isLoading ? 'Checking' : isError ? "You're offline" : 'Agent online';
+  if (!isError) return null;
 
   return (
     <span
-      className={cn(
-        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1 text-xs font-medium',
-        isError
-          ? 'border-attention/40 bg-attention-soft text-attention-ink'
-          : 'border-line bg-surface-sunken text-ink-muted',
-      )}
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-attention/40 bg-attention-soft px-2 py-1 text-xs font-medium text-attention-ink"
       role="status"
     >
-      <span
-        aria-hidden="true"
-        className={cn('h-1.5 w-1.5 rounded-full', isError ? 'bg-attention' : 'bg-strong')}
-      />
-      {label}
+      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-attention" />
+      You&apos;re offline
     </span>
   );
 }
