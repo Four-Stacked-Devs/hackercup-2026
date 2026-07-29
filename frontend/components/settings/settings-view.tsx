@@ -38,6 +38,8 @@ export function SettingsView() {
       />
 
       <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 px-3 py-5 sm:px-5">
+        <ProfileCard />
+
         <Card>
           <CardHeader
             title="Reading"
@@ -144,7 +146,7 @@ export function SettingsView() {
           />
 
           <div className="flex flex-wrap gap-2">
-            <ButtonLink variant="outline" href="/library">
+            <ButtonLink variant="outline" href="/materials">
               Delete a single material
             </ButtonLink>
             <Button
@@ -167,6 +169,16 @@ export function SettingsView() {
               ? 'Nothing leaves this browser: the API is being simulated.'
               : 'Requests go to the EducLM API.'}
           </p>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="About"
+            description="What EducLM runs on, and where AI is involved."
+          />
+          <ButtonLink variant="outline" href="/about/ai-use">
+            How EducLM uses AI
+          </ButtonLink>
         </Card>
       </div>
 
@@ -195,6 +207,34 @@ export function SettingsView() {
         }}
       />
     </>
+  );
+}
+
+/**
+ * Who this session belongs to. The API keys everything to an anonymous device
+ * id and has no endpoint to set a name, so the row is informational.
+ */
+function ProfileCard() {
+  const { displayName } = usePreferences();
+
+  return (
+    <Card>
+      <CardHeader title="Profile" />
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lime text-sm font-bold text-lime-ink"
+        >
+          {(displayName ?? 'S').slice(0, 1).toUpperCase()}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate font-medium text-ink">{displayName ?? 'Student'}</span>
+          <span className="block text-sm text-ink-muted">
+            Anonymous device session — no account, no email.
+          </span>
+        </span>
+      </div>
+    </Card>
   );
 }
 
