@@ -177,9 +177,19 @@
 html {
   font-size: calc(16px * var(--font-scale));
   -webkit-text-size-adjust: 100%;
+  /*
+   * The app is a fixed shell (h-dvh) that scrolls internally, so the page
+   * itself never scrolls. Pinning <html> also neutralises browser extensions
+   * that inject in-flow elements next to <body> — without this they stretch
+   * the document and expose a white strip below the app.
+   */
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--canvas);
 }
 
 body {
+  height: 100%;
   background-color: var(--canvas);
   color: var(--ink);
   font-family: var(--font-body);
