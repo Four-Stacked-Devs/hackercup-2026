@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { cn } from '@/lib/cn';
-import { AttachIcon, ChevronDownIcon, PlusIcon, SendIcon } from '@/components/ui/icons';
+import { ChevronDownIcon, PlusIcon, SendIcon } from '@/components/ui/icons';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
 import { useUploadDialog } from '@/components/upload/upload-dialog';
 import { useTopics } from '@/lib/hooks/use-study';
@@ -10,7 +10,7 @@ import { useTopics } from '@/lib/hooks/use-study';
 /**
  * The composer.
  *
- * One bordered field with its controls on a second row: add material, attach,
+ * One bordered field with its controls on a second row: add material
  * and the context pill naming what EDU is answering about. The mockup also
  * shows a microphone and a camera; neither has anything behind it here, so
  * neither is drawn — a control that cannot work is worse than an absent one.
@@ -77,16 +77,6 @@ export function Composer({
             className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
           >
             <PlusIcon />
-          </button>
-
-          <button
-            type="button"
-            onClick={openUpload}
-            aria-label="Attach a PDF"
-            title="Attach a PDF"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
-          >
-            <AttachIcon />
           </button>
 
           {showContext && materials.length > 0 ? (
