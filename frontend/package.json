@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "contracts": "npm --prefix ../backend/packages/contracts install --no-package-lock --no-audit --no-fund && npx --prefix ../backend/packages/contracts tsc -p ../backend/packages/contracts/tsconfig.json",
+    "contracts": "npm --prefix ../backend/packages/contracts install --no-package-lock --no-audit --no-fund && npx tsc -p ../backend/packages/contracts/tsconfig.json",
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
