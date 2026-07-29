@@ -11,7 +11,7 @@ export function ProgressScreen({ materialId }: { materialId: string }) {
   return (
     <SourceProvider materialId={materialId}>
       <WorkspaceHeader
-        title="Progress"
+        title="Your Progress"
         subtitle={material.data?.title ?? undefined}
         backHref="/"
         backLabel="Agent"

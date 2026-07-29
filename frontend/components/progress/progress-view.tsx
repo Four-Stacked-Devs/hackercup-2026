@@ -6,9 +6,9 @@ import { Card, CardHeader, SectionHeading } from '@/components/ui/card';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { MasteryPill } from '@/components/ui/chip';
 import { ProgressBar, ProgressRing, StatTile, TrendLine } from '@/components/ui/charts';
-import { EmptyState, ErrorState, InsufficientData, SkeletonCard } from '@/components/ui/states';
+import { EmptyState, ErrorState, InsufficientData, ScreenSkeleton } from '@/components/ui/states';
 import { EduSays } from '@/components/brand/edu-mascot';
-import { CONFIDENCE_LABEL, MASTERY_BAR, STEP_KIND_LABEL, percent } from '@/lib/format';
+import { CONFIDENCE_LABEL, MASTERY_BAR, STEP_KIND_LABEL, percent, shortDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { useProgressOverview, useRevertAdaptation } from '@/lib/hooks/use-progress';
 import { useCreatePracticeSet } from '@/lib/hooks/use-practice';
@@ -28,15 +28,7 @@ export function ProgressView({
 }) {
   const query = useProgressOverview(materialId);
 
-  if (query.isPending) {
-    return (
-      <div className="space-y-3">
-        <SkeletonCard lines={3} />
-        <SkeletonCard lines={4} />
-        <SkeletonCard lines={2} />
-      </div>
-    );
-  }
+  if (query.isPending) return <ScreenSkeleton variant="stats" className="p-0" />;
 
   if (query.isError) {
     return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
@@ -77,6 +69,8 @@ export function ProgressView({
           />
         </Card>
       )}
+
+      <Milestones overview={overview} />
 
       <WhatChanged plan={overview.plan} materialId={materialId} />
 
@@ -221,6 +215,55 @@ function MasteryRow({ topic }: { topic: TopicMastery }) {
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * Recent milestones, restricted to events the API actually dates: a detected
+ * finding and a plan adaptation. Step completions have no timestamp on the
+ * wire, so they are summarised rather than given invented dates.
+ */
+function Milestones({ overview }: { overview: ProgressOverview }) {
+  const done = overview.plan.steps.filter((step) => step.status === 'completed').length;
+
+  const events: { at: string; text: string }[] = [];
+  if (overview.plan.lastAdaptation) {
+    events.push({
+      at: overview.plan.lastAdaptation.at,
+      text: `Plan adapted: ${overview.plan.lastAdaptation.newStepTitle} moved up`,
+    });
+  }
+  if (overview.topFinding) {
+    events.push({
+      at: overview.topFinding.detectedAt,
+      text: `Pattern found: ${overview.topFinding.label.toLowerCase()} in ${overview.topFinding.topicName}`,
+    });
+  }
+  events.sort((a, b) => b.at.localeCompare(a.at));
+
+  if (events.length === 0 && done === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader title="Recent milestones" />
+      <ol className="m-0 list-none space-y-2">
+        {events.map((event) => (
+          <li key={event.at + event.text} className="flex items-start gap-2.5 text-sm">
+            <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-lime" />
+            <span className="min-w-0 flex-1 text-ink">{event.text}</span>
+            <span className="whitespace-nowrap text-xs text-ink-muted">{shortDate(event.at)}</span>
+          </li>
+        ))}
+        {done > 0 ? (
+          <li className="flex items-start gap-2.5 text-sm">
+            <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-strong" />
+            <span className="text-ink">
+              {done} plan step{done === 1 ? '' : 's'} completed so far
+            </span>
+          </li>
+        ) : null}
+      </ol>
+    </Card>
   );
 }
 
