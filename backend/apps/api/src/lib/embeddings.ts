@@ -5,8 +5,10 @@ import { env, VECTOR_DIMS } from '../env.js';
  * Embeddings, zero cost by default.
  *
  * `local` runs bge-small-en-v1.5 in-process through onnxruntime. No API key, no
- * network at query time, no rate limits. The model (~130MB) is downloaded once
- * on first use and cached in EMBEDDING_CACHE_DIR.
+ * network at query time, no rate limits. The model is downloaded once on first
+ * use and cached in EMBEDDING_CACHE_DIR — ~130MB at the default fp32, ~33MB at
+ * EMBEDDING_DTYPE=q8. Each precision is a separate file, so switching dtype
+ * downloads again.
  *
  * Groq — the configured LLM provider — serves no embeddings endpoint, which is
  * why this is a separate concern rather than another call on the LLM client.
@@ -34,8 +36,10 @@ async function getExtractor(): Promise<FeatureExtractor> {
       // Local ONNX only — never call out to a hosted inference API.
       transformers.env.allowRemoteModels = true;
 
+      // Precision is a deploy-time trade, not a code constant: fp32 locally,
+      // q8 on a 512MB container. See EMBEDDING_DTYPE in env.ts.
       const pipe = await transformers.pipeline('feature-extraction', env.EMBEDDING_MODEL, {
-        dtype: 'fp32',
+        dtype: env.EMBEDDING_DTYPE,
       });
 
       return pipe as unknown as FeatureExtractor;
@@ -155,7 +159,7 @@ export function toVectorLiteral(vector: number[]): string {
 export function describeEmbeddings(): { purpose: string; provider: string; model: string } {
   const provider =
     env.embeddingProvider === 'local'
-      ? 'local (onnxruntime, no network)'
+      ? `local (onnxruntime, no network, ${env.EMBEDDING_DTYPE})`
       : env.embeddingProvider === 'openai'
         ? 'openai'
         : 'none (deterministic stub)';

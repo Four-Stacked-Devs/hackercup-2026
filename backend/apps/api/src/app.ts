@@ -19,6 +19,7 @@ import { progressRoutes } from './routes/progress.js';
 import { planRoutes } from './routes/plan.js';
 import { meRoutes } from './routes/me.js';
 import { metaRoutes } from './routes/meta.js';
+import { statusRoutes } from './routes/status.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -65,6 +66,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const queue = createJobQueue(app.log);
   app.decorate('jobQueue', queue);
+
+  // Outside the API_BASE prefix: this is the human-facing root, not a v1 route.
+  await app.register(statusRoutes);
 
   await app.register(
     async (v1) => {

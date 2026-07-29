@@ -1,0 +1,88 @@
+# EducLM API — Render Blueprint
+#
+# Deploy: Render Dashboard -> New -> Blueprint -> pick this repo.
+# Render reads this file, creates the service, and prompts for the four secrets
+# marked `sync: false`. Nothing secret lives in this file.
+#
+# Migrations are NOT run here. They were applied from a developer machine with
+# DIRECT_URL, so this service never needs DDL rights — see README "Going live".
+
+services:
+  - type: web
+    name: educlm-api
+    runtime: node
+    plan: free
+    # Supabase is in ap-southeast-1; Singapore puts the API in the same city
+    # instead of routing every query across an ocean. Cannot be changed later.
+    region: singapore
+    rootDir: backend
+    healthCheckPath: /api/v1/meta/health
+
+    # Four things happen here, and the order matters:
+    #   npm i -g      NOT `corepack enable`: that writes shims into /usr/bin,
+    #                 which is read-only on Render's image, and the build dies
+    #                 with EROFS. Version matches packageManager in package.json.
+    #   --prod=false  Render sets NODE_ENV=production, which makes pnpm skip
+    #                 devDependencies. typescript, tsx and the prisma CLI all
+    #                 live there, so the build fails without this flag.
+    #   db:generate   apps/api/src/generated/ is gitignored, so the Prisma
+    #                 client does not exist until it is generated here.
+    #   build         turbo: contracts, then the API.
+    #   prewarm       downloads the ONNX weights into the image so the first
+    #                 request after a cold start does not pay for it.
+    buildCommand: >-
+      npm install -g pnpm@11.17.0 &&
+      pnpm install --frozen-lockfile --prod=false &&
+      pnpm --filter @educlm/api db:generate &&
+      pnpm build &&
+      pnpm --filter @educlm/api exec tsx scripts/prewarm.ts
+
+    # Must stay `pnpm --filter` to match the prewarm step's working directory:
+    # EMBEDDING_CACHE_DIR is the relative './.models', so a different cwd here
+    # would silently miss the cache and re-download on every boot.
+    startCommand: pnpm --filter @educlm/api start
+
+    envVars:
+      # Belt and braces with backend/.node-version. Root package.json says
+      # ">=20", an open range Render resolves to the newest Node in existence —
+      # it picked 26.5.0 on the first deploy attempt. Prisma 7 and the
+      # onnxruntime-node native binaries have not been tested there.
+      # Precedence is NODE_VERSION > .node-version > engines.node.
+      - key: NODE_VERSION
+        value: 22.18.0
+
+      # The free instance is 512MB. fp32 weights (~130MB resident) alongside
+      # Node, Fastify, Prisma and unpdf page buffers do not fit with headroom.
+      # q8 is ~33MB. See EMBEDDING_DTYPE in apps/api/src/env.ts.
+      - key: EMBEDDING_DTYPE
+        value: q8
+
+      - key: EMBEDDING_PROVIDER
+        value: local
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile
+      - key: LOG_LEVEL
+        value: info
+
+      # Supabase SESSION pooler, port 5432, user postgres.<projectref>.
+      # Not db.<projectref>.supabase.co — that host is IPv6-only and Render's
+      # egress is IPv4, so it fails with an opaque timeout.
+      - key: DATABASE_URL
+        sync: false
+
+      # DIRECT_URL is deliberately absent. It exists only for `prisma migrate`,
+      # and a leaked runtime env then cannot execute DDL.
+
+      - key: LLM_API_KEY
+        sync: false
+
+      # Exact frontend origin, scheme included, no trailing slash. Comma-
+      # separated for more than one. Defaults to http://localhost:3000, which
+      # blocks the deployed frontend — this is the usual first-deploy failure.
+      - key: CORS_ORIGIN
+        sync: false
+
+# PORT is injected by Render and read by apps/api/src/env.ts; index.ts already
+# binds 0.0.0.0. Do not set it.
