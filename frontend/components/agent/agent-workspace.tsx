@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -13,7 +13,8 @@ import { useCurrentMaterial } from '@/components/providers/material-provider';
 import { useUploadDialog } from '@/components/upload/upload-dialog';
 import { useChatStream } from '@/lib/hooks/use-study';
 import { useThreads } from '@/lib/hooks/use-threads';
-import { findThread } from '@/lib/threads';
+import { findThread, findThreadByKey } from '@/lib/threads';
+import { newConversationId } from '@/lib/thread-index';
 import { Conversation, AgentWorking } from './conversation';
 import { Composer } from './composer';
 import { ActionChips } from './action-chips';
@@ -77,27 +78,63 @@ function ConversationColumn({
   const searchParams = useSearchParams();
   const activeTopicId = searchParams.get('topic');
   // Plain `/` is a fresh start — the logo and New Chat always land on the
-  // greeting. The untopiced conversation lives at `/?thread=all`.
-  const showUngrouped = searchParams.get('thread') === 'all';
+  // greeting. `?thread=all` is the pre-existing untopiced log; `?thread=conv-…`
+  // is one conversation started from that greeting.
+  const activeThreadKey = searchParams.get('thread');
 
-  const { threads, record, isPending, isError, error, refetch } = useThreads(materialId);
+  const { threads, record, recordConversation, isPending, isError, error, refetch } =
+    useThreads(materialId);
+
   const thread = activeTopicId
     ? findThread(threads, activeTopicId)
-    : showUngrouped
+    : activeThreadKey === 'all'
       ? findThread(threads, null)
-      : undefined;
+      : activeThreadKey
+        ? findThreadByKey(threads, activeThreadKey)
+        : undefined;
+
+  /**
+   * Which thread the in-flight message belongs to, decided at send time.
+   *
+   * It cannot be decided on arrival: by then the greeting has been replaced and
+   * there is no longer anything to distinguish "this began a new conversation"
+   * from "this continued the open one". Sending from the greeting mints an id,
+   * so a new chat never lands in the shared untopiced thread — which is exactly
+   * what made previous messages appear the moment you sent one.
+   */
+  const pendingConversationRef = useRef<string | null>(null);
 
   const stream = useChatStream(materialId, {
     onAssistantMessage: useCallback(
       (message: { id: string }, topicId: string | null) => {
+        const conversationId = pendingConversationRef.current;
+        pendingConversationRef.current = null;
+
+        if (conversationId) {
+          recordConversation(conversationId, [message.id]);
+          // Follow the answer into its own conversation, so the settled reply
+          // stays on screen and the sidebar row is the one now open.
+          router.replace(`/?thread=${conversationId}`);
+          return;
+        }
+
         record(topicId, [message.id]);
-        // A first message sent from the fresh home belongs to the untopiced
-        // thread; follow it there so the settled answer stays on screen.
         if (!topicId) router.replace('/?thread=all');
       },
-      [record, router],
+      [record, recordConversation, router],
     ),
   });
+
+  /** Stamps the in-flight message with its thread, then sends it. */
+  const send = (message: string, topicId?: string) => {
+    pendingConversationRef.current =
+      activeTopicId || activeThreadKey === 'all'
+        ? // An open topic thread, or the legacy untopiced log: append to it.
+          null
+        : (activeThreadKey ?? newConversationId());
+
+    stream.send(message, topicId);
+  };
 
   const setTopic = (topicId: string | null) =>
     router.replace(topicId ? `/?topic=${topicId}` : '/?thread=all');
@@ -132,7 +169,7 @@ function ConversationColumn({
             <ActionChips
               materialId={materialId}
               topicId={activeTopicId}
-              onAsk={(message) => stream.send(message, activeTopicId ?? undefined)}
+              onAsk={(message) => send(message, activeTopicId ?? undefined)}
               busy={stream.isStreaming}
             />
           ) : null}
@@ -141,7 +178,7 @@ function ConversationColumn({
 
       <div className="mx-auto w-full max-w-3xl">
         <Composer
-          onSend={(message) => stream.send(message, activeTopicId ?? undefined)}
+          onSend={(message) => send(message, activeTopicId ?? undefined)}
           busy={stream.isStreaming}
           topicId={activeTopicId}
           onTopicChange={setTopic}

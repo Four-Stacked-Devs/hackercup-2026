@@ -11,9 +11,18 @@ interface ThreadListProps {
   threads: readonly ChatThread[];
   /** The topic currently open in the workspace, if any. */
   activeTopicId: string | null;
+  /** The conversation currently open (`/?thread=conv-…`), if any. */
+  activeThreadKey?: string | null;
   /** Whether the untopiced thread (`/?thread=all`) is the one open. */
   ungroupedOpen: boolean;
   isPending: boolean;
+}
+
+/** Topic threads open by topic; conversations by their own key. */
+function hrefFor(thread: ChatThread): string {
+  if (thread.topicId) return `/?topic=${thread.topicId}`;
+  if (thread.conversationId) return `/?thread=${thread.conversationId}`;
+  return '/?thread=all';
 }
 
 /**
@@ -23,7 +32,13 @@ interface ThreadListProps {
  * recorded locally (see `lib/thread-index.ts`), so anything this browser did
  * not send appears in the ungrouped thread rather than being dropped.
  */
-export function ThreadList({ threads, activeTopicId, ungroupedOpen, isPending }: ThreadListProps) {
+export function ThreadList({
+  threads,
+  activeTopicId,
+  activeThreadKey = null,
+  ungroupedOpen,
+  isPending,
+}: ThreadListProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -87,11 +102,13 @@ export function ThreadList({ threads, activeTopicId, ungroupedOpen, isPending }:
                     key={thread.key}
                     thread={thread}
                     active={
-                      thread.topicId ? thread.topicId === activeTopicId : ungroupedOpen
+                      thread.topicId
+                        ? thread.topicId === activeTopicId
+                        : thread.conversationId
+                          ? thread.conversationId === activeThreadKey
+                          : ungroupedOpen
                     }
-                    onOpen={() =>
-                      router.push(thread.topicId ? `/?topic=${thread.topicId}` : '/?thread=all')
-                    }
+                    onOpen={() => router.push(hrefFor(thread))}
                   />
                 ))}
               </ul>

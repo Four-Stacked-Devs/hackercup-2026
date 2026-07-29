@@ -117,7 +117,10 @@ export function Sidebar() {
   };
 
   const activeTopicId = pathname === '/' ? searchParams.get('topic') : null;
-  const ungroupedOpen = pathname === '/' && searchParams.get('thread') === 'all';
+  const threadParam = pathname === '/' ? searchParams.get('thread') : null;
+  const ungroupedOpen = threadParam === 'all';
+  // Anything other than `all` is one conversation started from the greeting.
+  const activeThreadKey = threadParam === 'all' ? null : threadParam;
 
   const toggle = (
     <button
@@ -191,6 +194,7 @@ export function Sidebar() {
         <ThreadList
           threads={threads}
           activeTopicId={activeTopicId}
+          activeThreadKey={activeThreadKey}
           ungroupedOpen={ungroupedOpen}
           isPending={isPending}
         />

@@ -41,9 +41,11 @@ function titleFor(topicName: string | undefined, threadMessages: readonly ChatMe
 }
 
 export interface ChatThread {
-  /** Stable list key. The topic id, or `__ungrouped__`. */
+  /** Stable list key: the conversation id, the topic id, or `__ungrouped__`. */
   key: string;
   topicId: string | null;
+  /** Set when this thread was started by "New Chat" rather than by a topic. */
+  conversationId: string | null;
   title: string;
   messages: ChatMessage[];
   /** createdAt of the most recent message in the thread. */
@@ -72,42 +74,61 @@ const UNGROUPED_KEY = '__ungrouped__';
 /**
  * Splits a material's message log into threads.
  *
- * @param messages  the material's full log, any order
- * @param topicOf   message id -> topic id, from the local index
- * @param topics    the material's topics, for real names
+ * Precedence is conversation, then topic, then the ungrouped remainder:
+ *  - a message recorded under a conversation is its own thread, so every
+ *    "New Chat" stays separate instead of merging into one pile;
+ *  - a message recorded only under a topic keeps the topic thread it had;
+ *  - anything unrecorded — sent before this index existed, or from another
+ *    browser — falls into the single ungrouped thread rather than vanishing.
+ *
+ * @param messages        the material's full log, any order
+ * @param topicOf         message id -> topic id, from the local index
+ * @param topics          the material's topics, for real names
+ * @param conversationOf  message id -> conversation id, from the local index
  */
 export function buildThreads(
   messages: ChatMessage[],
   topicOf: Readonly<Record<string, string>>,
   topics: readonly Topic[],
+  conversationOf: Readonly<Record<string, string>> = {},
 ): ChatThread[] {
   const nameOf = new Map(topics.map((topic) => [topic.id, topic.name]));
-  const byTopic = new Map<string, ChatMessage[]>();
+  const buckets = new Map<string, ChatMessage[]>();
 
   const ordered = [...messages].sort(byCreatedAtAscending);
-  const resolved = withAdjacentQuestions(ordered, topicOf);
+  const resolvedTopic = withAdjacentQuestions(ordered, topicOf);
+  const resolvedConversation = withAdjacentQuestions(ordered, conversationOf);
 
   for (const message of ordered) {
-    const topicId = resolved[message.id];
+    const conversationId = resolvedConversation[message.id];
+    const topicId = resolvedTopic[message.id];
+
     // A recorded topic that is no longer in the material (deleted, or from
     // another material's index) is treated as unrecorded rather than dropped.
-    const key = topicId && nameOf.has(topicId) ? topicId : UNGROUPED_KEY;
+    const key =
+      conversationId ?? (topicId && nameOf.has(topicId) ? topicId : UNGROUPED_KEY);
 
-    const bucket = byTopic.get(key);
+    const bucket = buckets.get(key);
     if (bucket) bucket.push(message);
-    else byTopic.set(key, [message]);
+    else buckets.set(key, [message]);
   }
 
   const threads: ChatThread[] = [];
 
-  for (const [key, threadMessages] of byTopic) {
+  for (const [key, threadMessages] of buckets) {
     const last = threadMessages[threadMessages.length - 1];
     if (!last) continue;
 
+    const isConversation = isConversationKey(key);
+    const isTopic = !isConversation && key !== UNGROUPED_KEY;
+
     threads.push({
       key,
-      topicId: key === UNGROUPED_KEY ? null : key,
-      title: titleFor(key === UNGROUPED_KEY ? undefined : nameOf.get(key), threadMessages),
+      topicId: isTopic ? key : null,
+      conversationId: isConversation ? key : null,
+      // A conversation is named after what was asked in it, never after a
+      // topic: the topic only scoped retrieval, it did not open the thread.
+      title: titleFor(isTopic ? nameOf.get(key) : undefined, threadMessages),
       // `ordered` was sorted before bucketing, so each bucket is already in order.
       messages: threadMessages,
       lastActivityAt: last.createdAt,
@@ -117,6 +138,19 @@ export function buildThreads(
 
   // Most recently active first, which is also the order the buckets read in.
   return threads.sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
+}
+
+/** Mirrors the `conv-` prefix minted by `lib/thread-index.ts`. */
+function isConversationKey(key: string): boolean {
+  return key.startsWith('conv-');
+}
+
+/** Looks a thread up by its list key, which is what `?thread=` carries. */
+export function findThreadByKey(
+  threads: readonly ChatThread[],
+  key: string,
+): ChatThread | undefined {
+  return threads.find((thread) => thread.key === key);
 }
 
 /**
@@ -164,11 +198,18 @@ export function filterThreads(threads: readonly ChatThread[], query: string): Ch
   );
 }
 
+/**
+ * By topic id, or — for `null` — the ungrouped thread specifically. Conversation
+ * threads also carry a null `topicId`, so matching on that alone would hand back
+ * whichever conversation happened to sort first.
+ */
 export function findThread(
   threads: readonly ChatThread[],
   topicId: string | null,
 ): ChatThread | undefined {
-  return threads.find((thread) => thread.topicId === topicId);
+  return topicId === null
+    ? threads.find((thread) => thread.key === UNGROUPED_KEY)
+    : threads.find((thread) => thread.topicId === topicId);
 }
 
 /**
