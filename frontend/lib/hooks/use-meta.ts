@@ -17,7 +17,8 @@ export function useHealth() {
   return useQuery({
     queryKey: queryKeys.health(),
     queryFn: ({ signal }) => getHealth(signal),
-    refetchInterval: 30_000,
+    // Knock more often while the server is away so recovery shows quickly.
+    refetchInterval: (query) => (query.state.status === 'error' ? 5_000 : 30_000),
     retry: 1,
     staleTime: 10_000,
   });

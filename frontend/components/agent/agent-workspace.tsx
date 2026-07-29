@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { ButtonLink } from '@/components/ui/button';
-import { ErrorState, SkeletonCard } from '@/components/ui/states';
+import { ErrorState, ScreenSkeleton } from '@/components/ui/states';
 import { PlanIcon, UploadIcon } from '@/components/ui/icons';
 import { EduMascot } from '@/components/brand/edu-mascot';
 import { WorkspaceHeader } from '@/components/shell/workspace-header';
@@ -28,14 +28,7 @@ import { Greeting } from './greeting';
 export function AgentWorkspace() {
   const { material, materials, isLoading, error, refetch } = useCurrentMaterial();
 
-  if (isLoading) {
-    return (
-      <div className="space-y-3 p-4">
-        <SkeletonCard lines={2} />
-        <SkeletonCard lines={5} />
-      </div>
-    );
-  }
+  if (isLoading) return <ScreenSkeleton variant="chat" />;
 
   if (error) {
     return (
