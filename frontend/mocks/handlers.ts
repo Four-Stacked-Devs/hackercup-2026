@@ -224,7 +224,7 @@ export const handlers = [
       return fail('LLM_UNAVAILABLE', 'The tutor is unavailable right now. Please try again.');
     }
 
-    const answer = store.answerQuestion(body.message, body.topicId);
+    const answer = store.answerQuestion(body.message, body.topicId, materialId);
     const assistantMessage: ChatMessage = {
       id: store.nextChatId(),
       role: 'assistant',

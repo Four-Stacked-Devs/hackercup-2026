@@ -1117,18 +1117,104 @@ export interface MockAnswer {
 }
 
 /**
+ * Intent classification, mirroring `apps/api/src/modules/agent/chat.ts`.
+ *
+ * Kept in step with the backend on purpose: a greeting answered with "I can't
+ * find that in this material" is the same bug in mock mode as in live mode, and
+ * mock mode is what a first-time visitor sees. The patterns are anchored to the
+ * whole message so anything carrying a real question stays on the retrieval
+ * path — "what can you do with arrays?" is about the material, not about EDU.
+ */
+type ChatIntent = 'greeting' | 'capability' | 'material';
+
+const GREETING_ONLY =
+  /^(?:hi|hey|hello|yo|hiya|sup|good\s(?:morning|afternoon|evening)|thanks?|thank\syou|ty|cheers|ok(?:ay)?|cool|nice|great|bye|goodbye|see\sya)[\s!.,?]*$/i;
+
+const CAPABILITY_TAIL = String.raw`(?:\sexactly|\shere|\sfor\sme|\swith\sthis|\sin\sthis\sapp)?[\s!.?]*$`;
+
+const CAPABILITY_PATTERNS: RegExp[] = [
+  new RegExp(String.raw`^what\scan\syou\s(?:do|help\swith)${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^what\s(?:do|can)\syou\soffer${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^what\sare\syour\s(?:features|capabilities)${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^what\sdo\syou\sdo${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^who\sare\syou${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^what\sare\syou${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^how\s(?:do|can)\syou\s(?:work|help)(?:\sme)?${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^how\sdo\si\suse\s(?:this|you|it)${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^what\scan\si\sask(?:\syou)?(?:\sabout)?${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^(?:help|help\sme)${CAPABILITY_TAIL}`, 'i'),
+  new RegExp(String.raw`^can\syou\shelp(?:\sme)?${CAPABILITY_TAIL}`, 'i'),
+];
+
+function classifyIntent(message: string): ChatIntent {
+  const trimmed = message.trim();
+  if (GREETING_ONLY.test(trimmed)) return 'greeting';
+  if (CAPABILITY_PATTERNS.some((pattern) => pattern.test(trimmed))) return 'capability';
+  return 'material';
+}
+
+/** Every line maps to something the API actually serves. */
+const CAPABILITIES = [
+  'Explain any part of the material in plain language, marking the page each point came from.',
+  'Work through a hard idea one step at a time, and check understanding as we go.',
+  'Build practice questions from the material and mark them with feedback.',
+  'Point to the progress screen: how each topic is going, accuracy over time, and the specific misunderstandings the answers reveal.',
+  'Keep a study plan that adapts as practice happens.',
+];
+
+function conversationalAnswer(
+  intent: Exclude<ChatIntent, 'material'>,
+  materialTitle: string | null,
+): string {
+  const about = materialTitle ? ` about ${materialTitle}` : '';
+
+  if (intent === 'greeting') {
+    return [
+      `Hi! I'm EDU, your study partner${materialTitle ? ` for ${materialTitle}` : ''}.`,
+      '',
+      `Ask me anything${about} and I'll explain it in plain language, quoting the page it came from. I can also build practice questions, or show you how each topic is going.`,
+      '',
+      'What would you like to start with?',
+    ].join('\n');
+  }
+
+  return [
+    materialTitle
+      ? `Here is what I can help you with on ${materialTitle}:`
+      : 'Here is what I can help you with:',
+    '',
+    ...CAPABILITIES.map((line) => `- ${line}`),
+    '',
+    'Ask me a question about the material to get going, or say "quiz me" and I will build practice from it.',
+  ].join('\n');
+}
+
+/**
  * Answers only from the material: the reply is assembled out of the pages that
  * matched, so every sentence has a page behind it, exactly as the live agent's
  * grounding rule requires.
  */
-export function answerQuestion(question: string, topicId?: string): MockAnswer {
+export function answerQuestion(
+  question: string,
+  topicId?: string,
+  materialId?: string,
+): MockAnswer {
+  // Conversation rather than coursework: nothing to retrieve, nothing to cite.
+  // The title is looked up rather than taken from the fixture, so a material
+  // uploaded in mock mode is greeted by its own name.
+  const intent = classifyIntent(question);
+  if (intent !== 'material') {
+    const title = (materialId ? findMaterial(materialId)?.title : undefined) ?? null;
+    return { text: conversationalAnswer(intent, title), citations: [] };
+  }
+
   const pages = retrieve(question, topicId);
   const citations = pages.map(citationForPage);
   const primary = pages[0] !== undefined ? pageText[pages[0]] : undefined;
 
   if (!primary) {
     return {
-      text: "I can't find that in this material. Try asking about one of the topics in the list, or check the original page.",
+      text: "I can't find that in this material, so I won't guess at it.\n\nTry rephrasing it, or ask about one of the topics in the list. I can also build practice questions from what it does cover, or show you how each topic is going.",
       citations: [],
     };
   }
