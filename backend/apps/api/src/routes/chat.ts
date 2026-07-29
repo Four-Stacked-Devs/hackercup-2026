@@ -15,7 +15,7 @@ import { errors } from '../lib/errors.js';
 import { ok } from '../lib/envelope.js';
 import { createLlmClient } from '../lib/llm.js';
 import { toChatMessage } from '../lib/serializers.js';
-import { answerQuestion, streamAnswer } from '../modules/agent/chat.js';
+import { answerQuestion, classifyIntent, streamAnswer } from '../modules/agent/chat.js';
 import { retrieveChunks } from '../modules/agent/retrieval.js';
 
 export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
@@ -38,11 +38,18 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
       const { message, topicId, stream } = request.body;
       const llm = createLlmClient(request.log);
 
-      const chunks = await retrieveChunks({
-        materialId: material.id,
-        query: message,
-        topicId,
-      });
+      // Classified before retrieval: a greeting has nothing to retrieve, and
+      // embedding it would cost a model call to match passages against "hi".
+      const intent = classifyIntent(message);
+
+      const chunks =
+        intent === 'material'
+          ? await retrieveChunks({
+              materialId: material.id,
+              query: message,
+              topicId,
+            })
+          : [];
 
       await db().chatMessage.create({
         data: {
@@ -69,7 +76,13 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
 
       // ── Non-streaming ────────────────────────────────────────────────────
       if (stream === false) {
-        const result = await answerQuestion({ question: message, chunks, llm });
+        const result = await answerQuestion({
+          question: message,
+          chunks,
+          llm,
+          intent,
+          materialTitle: material.title,
+        });
 
         if (result.refusedHomework) {
           request.log.info(
@@ -102,7 +115,13 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
       };
 
       try {
-        const generator = streamAnswer({ question: message, chunks, llm });
+        const generator = streamAnswer({
+          question: message,
+          chunks,
+          llm,
+          intent,
+          materialTitle: material.title,
+        });
 
         let next = await generator.next();
         while (!next.done) {

@@ -152,7 +152,7 @@ apps/api/src/
 ├─ services/     impure orchestration (DB + engine + LLM)
 ├─ modules/
 │  ├─ ingestion/ extract → chunk → topics → embed → lessons
-│  ├─ agent/     retrieval, grounded chat, question generation
+│  ├─ agent/     retrieval, grounded chat, small talk, question generation
 │  └─ analytics/ PURE functions. no I/O, no LLM, no clock
 ├─ db/           prisma client (Supabase or PGlite)
 ├─ jobs/         in-process ingestion queue
@@ -196,6 +196,7 @@ the two documents do not disagree.
 | 10 | — | PGlite fallback when `DATABASE_URL` is unset | Makes the API runnable with zero configuration without introducing a second data path. |
 | 11 | Trend thirds | Thirds taken over responses, not daily buckets | The spec's own floor ("fewer than 6 total responses") is expressed in responses, and a bucket split collapses to one bucket when a student practises in a single sitting. |
 | 12 | `revert-adaptation` removes inserted steps | Removes *pending and active* inserted steps; keeps completed ones | Deleting work the student actually finished would erase real history from their progress view. |
+| 13 | Every chat turn is retrieved and grounded | Greetings and "what can you do" answer conversationally, with no retrieval and no citations | "hi" put through the grounded prompt replies "the passages do not cover that", which reads as broken. Classification is anchored to the whole message, so anything carrying a real question ("what can you do with arrays?") stays on the grounded path. |
 
 Not built, by design: `packages/mocks` (the frontend team owns it) and `apps/web`.
 
