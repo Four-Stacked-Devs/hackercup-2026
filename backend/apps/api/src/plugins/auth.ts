@@ -22,9 +22,16 @@ declare module 'fastify' {
 /** Routes that legitimately have no user (health, AI disclosure). */
 const PUBLIC_PREFIXES = ['/api/v1/meta'];
 
+/**
+ * Matched exactly, never as a prefix. '/' is a prefix of every URL in the API,
+ * so adding it to PUBLIC_PREFIXES would silently make the entire surface
+ * unauthenticated. Keep the two lists separate for that reason alone.
+ */
+const PUBLIC_PATHS = ['/'];
+
 function isPublic(url: string): boolean {
   const path = url.split('?')[0] ?? '';
-  return PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
+  return PUBLIC_PATHS.includes(path) || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
 export async function registerAuth(app: FastifyInstance): Promise<void> {
