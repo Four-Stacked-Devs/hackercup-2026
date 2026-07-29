@@ -1,19 +1,21 @@
-import { WorkspaceHeader } from '@/components/shell/workspace-header';
-import { UploadView } from '@/components/upload/upload-view';
+'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useUploadDialog } from '@/components/upload/upload-dialog';
+
+/**
+ * Add material lives in a modal now. This route survives only so old links
+ * and bookmarks still work: it opens the dialog over the home screen.
+ */
 export default function UploadPage() {
-  return (
-    <>
-      <WorkspaceHeader
-        title="Add material"
-        subtitle="One PDF becomes a lesson, a plan and a question bank."
-        backHref="/"
-        backLabel="Agent"
-        showStatus={false}
-      />
-      <div className="mx-auto w-full max-w-2xl flex-1 px-3 py-5 sm:px-5">
-        <UploadView />
-      </div>
-    </>
-  );
+  const router = useRouter();
+  const { openUpload } = useUploadDialog();
+
+  useEffect(() => {
+    openUpload();
+    router.replace('/');
+  }, [openUpload, router]);
+
+  return null;
 }

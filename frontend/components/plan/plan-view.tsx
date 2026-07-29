@@ -6,7 +6,7 @@ import { Card, CardHeader, SectionHeading } from '@/components/ui/card';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Chip, StatusLabel } from '@/components/ui/chip';
 import { ProgressRing } from '@/components/ui/charts';
-import { ErrorState, SkeletonCard } from '@/components/ui/states';
+import { ErrorState, ScreenSkeleton } from '@/components/ui/states';
 import { EduSays } from '@/components/brand/edu-mascot';
 import { CheckIcon } from '@/components/ui/icons';
 import { STEP_KIND_LABEL, minutesLabel } from '@/lib/format';
@@ -36,14 +36,7 @@ export function PlanView({
 }) {
   const query = usePlan(materialId);
 
-  if (query.isPending) {
-    return (
-      <div className="space-y-3">
-        <SkeletonCard lines={2} />
-        <SkeletonCard lines={6} />
-      </div>
-    );
-  }
+  if (query.isPending) return <ScreenSkeleton variant="list" className="p-0" />;
 
   if (query.isError) {
     return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
@@ -64,12 +57,12 @@ export function PlanView({
     <div className="space-y-4">
       <Card>
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Goal" value={materialTitle} />
+          <Stat label="Goal" value={`Master ${materialTitle}`} />
           <Stat label="Time left" value={minutesLabel(remaining)} />
           <Stat label="Steps done" value={`${done} of ${plan.steps.length}`} />
           <Stat
-            label="Deadline"
-            value={<span className="text-ink-muted">Not tracked in this build</span>}
+            label="Overall progress"
+            value={plan.steps.length === 0 ? '—' : `${Math.round((done / plan.steps.length) * 100)}%`}
           />
         </dl>
       </Card>
@@ -129,7 +122,7 @@ export function PlanView({
 
             {current ? (
               <Card className="border-lime">
-                <SectionHeading title="Recommended next step" level={3} />
+                <SectionHeading title="Up next" level={3} />
                 <p className="text-sm font-semibold text-ink">{current.title}</p>
                 <p className="mt-1 text-xs text-ink-muted">{current.description}</p>
                 <div className="mt-3">
@@ -140,7 +133,7 @@ export function PlanView({
           </div>
         ) : current ? (
           <Card className="border-lime">
-            <SectionHeading title="Recommended next step" level={3} />
+            <SectionHeading title="Up next" level={3} />
             <p className="text-sm font-semibold text-ink">{current.title}</p>
             <div className="mt-3">
               <StepAction step={current} materialId={materialId} primary />

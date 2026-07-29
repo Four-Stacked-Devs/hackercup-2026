@@ -1,18 +1,22 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '@educlm/contracts';
 import { Markdown } from '@/components/ui/markdown';
 import { ErrorState, Skeleton } from '@/components/ui/states';
-import { CheckIcon, WorkingDots } from '@/components/ui/icons';
+import { CheckIcon, CopyIcon, WorkingDots } from '@/components/ui/icons';
 import { CitationChip } from '@/components/source/source-sheet';
 import { EduMascot } from '@/components/brand/edu-mascot';
 import { clockTime } from '@/lib/format';
 import type { StreamingAnswer } from '@/lib/hooks/use-study';
 
 /**
- * The conversation: your turn on the right in a plain bubble, EDU's turn on the
- * left behind the mascot, and the sources under every answer.
+ * The conversation.
+ *
+ * Your turn is a grey pill on the right. EDU's turn is plain prose on the left
+ * behind the mascot — no card around it, so the answer reads as text rather
+ * than as a component, and any structure inside it (a table, a worked example)
+ * supplies its own frame. Sources sit under the answer they belong to.
  */
 export function Conversation({
   messages,
@@ -55,7 +59,7 @@ export function Conversation({
   const empty = messages.length === 0 && !pendingQuestion;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {empty ? emptyState : null}
 
       {messages.map((message) => (
@@ -84,80 +88,96 @@ export function Conversation({
 }
 
 function MessageRow({ message }: { message: ChatMessage }) {
-  const isUser = message.role === 'user';
-
-  if (isUser) {
+  if (message.role === 'user') {
     return (
       <article className="flex justify-end">
-        <div className="max-w-[85%] min-w-0">
-          <p className="mb-1 text-right text-xs text-ink-subtle">
-            You · {clockTime(message.createdAt)}
+        <div className="min-w-0 max-w-[80%]">
+          <p className="rounded-2xl bg-surface-sunken px-4 py-2.5 text-sm leading-relaxed text-ink">
+            <span className="sr-only">You said at {clockTime(message.createdAt)}: </span>
+            <span className="whitespace-pre-wrap">{message.content}</span>
           </p>
-          <div className="rounded-lg rounded-tr-sm border border-line bg-lime-soft px-3 py-2 text-sm text-ink">
-            <p className="whitespace-pre-wrap">{message.content}</p>
-          </div>
         </div>
       </article>
     );
   }
 
   return (
-    <article className="flex gap-2.5">
-      <EduMascot size={28} className="mt-5" />
+    <article className="flex gap-3">
+      <EduMascot size={30} className="mt-0.5 shrink-0" />
 
       <div className="min-w-0 flex-1">
-        <p className="mb-1 flex items-baseline gap-2 text-xs text-ink-subtle">
-          <span className="font-display text-sm font-bold text-ink">EDU</span>
-          <span>{clockTime(message.createdAt)}</span>
-        </p>
+        <p className="sr-only">EDU said at {clockTime(message.createdAt)}:</p>
+        <Markdown className="prose-compact text-ink">{message.content}</Markdown>
 
-        <div className="rounded-lg rounded-tl-sm border border-line bg-surface px-3 py-2 text-ink">
-          <Markdown className="prose-compact">{message.content}</Markdown>
+        {message.citations.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <span className="sr-only">Sources for this answer</span>
+            {message.citations.map((citation) => (
+              <CitationChip key={`${citation.chunkId}-${citation.page}`} citation={citation} />
+            ))}
+          </div>
+        ) : null}
 
-          {message.citations.length > 0 ? (
-            <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-line pt-2.5">
-              <span className="sr-only">Sources for this answer</span>
-              {message.citations.map((citation) => (
-                <CitationChip key={`${citation.chunkId}-${citation.page}`} citation={citation} />
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <CopyAnswerButton content={message.content} />
       </div>
     </article>
   );
 }
 
+/**
+ * The mockup's answer-footer row, reduced to the one control with something
+ * behind it. Thumbs up/down have no endpoint, so they are not drawn.
+ */
+function CopyAnswerButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2_000);
+    } catch {
+      // Clipboard needs a secure context; without one the button does nothing
+      // rather than pretending it worked.
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-xs text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
+    >
+      {copied ? <CheckIcon width="1em" height="1em" className="text-strong" /> : <CopyIcon width="1em" height="1em" />}
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
 function StreamingRow({ answer }: { answer: StreamingAnswer }) {
   return (
-    <article className="flex gap-2.5">
-      <EduMascot mood="thinking" size={28} className="mt-5" />
+    <article className="flex gap-3">
+      <EduMascot mood="thinking" size={30} className="mt-0.5 shrink-0" />
+
       <div className="min-w-0 flex-1">
-        <p className="mb-1 flex items-baseline gap-2 text-xs text-ink-subtle">
-          <span className="font-display text-sm font-bold text-ink">EDU</span>
-          <span>now</span>
-        </p>
-
-        <div className="rounded-lg rounded-tl-sm border border-line bg-surface px-3 py-2">
-          <div aria-live="polite" aria-busy="true">
-            {answer.content ? (
-              <Markdown className="prose-compact">{answer.content}</Markdown>
-            ) : (
-              <p className="flex items-center gap-2 text-sm text-ink-muted">
-                <WorkingDots className="text-ink" />
-                Looking through your material
-              </p>
-            )}
-          </div>
-
-          {answer.citations.length > 0 ? (
-            <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-line pt-2.5">
-              {answer.citations.map((citation) => (
-                <CitationChip key={`${citation.chunkId}-${citation.page}`} citation={citation} />
-              ))}
-            </div>
-          ) : null}
+        <div aria-live="polite" aria-busy="true">
+          {answer.content ? (
+            <Markdown className="prose-compact text-ink">{answer.content}</Markdown>
+          ) : (
+            <p className="flex items-center gap-2 text-sm text-ink-muted">
+              <WorkingDots className="text-ink" />
+              Looking through your material
+            </p>
+          )}
         </div>
+
+        {answer.citations.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {answer.citations.map((citation) => (
+              <CitationChip key={`${citation.chunkId}-${citation.page}`} citation={citation} />
+            ))}
+          </div>
+        ) : null}
       </div>
     </article>
   );

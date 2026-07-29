@@ -1,169 +1,161 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { AttachIcon, MicIcon, SendIcon } from '@/components/ui/icons';
-import { ErrorState } from '@/components/ui/states';
-import { useCurrentMaterial } from '@/components/providers/material-provider';
-import { useCreatePracticeSet } from '@/lib/hooks/use-practice';
 import { cn } from '@/lib/cn';
+import { ChevronDownIcon, PlusIcon, SendIcon } from '@/components/ui/icons';
+import { useCurrentMaterial } from '@/components/providers/material-provider';
+import { useUploadDialog } from '@/components/upload/upload-dialog';
+import { useTopics } from '@/lib/hooks/use-study';
 
-export interface QuickAction {
-  label: string;
-  prompt: string;
-}
-
-/** The four quick actions the product promises, in the student's words. */
-export const QUICK_ACTIONS: QuickAction[] = [
-  { label: 'Explain simply', prompt: 'Explain this topic simply, in plain language.' },
-  { label: 'Give an example', prompt: 'Give me a worked example of this topic.' },
-  { label: 'Summarise this section', prompt: 'Summarise this section in a few short points.' },
-];
-
-const TOOL = 'inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs text-ink-muted hover:bg-surface-sunken hover:text-ink';
-
+/**
+ * The composer.
+ *
+ * One bordered field with its controls on a second row: add material
+ * and the context pill naming what EDU is answering about. The mockup also
+ * shows a microphone and a camera; neither has anything behind it here, so
+ * neither is drawn — a control that cannot work is worse than an absent one.
+ */
 export function Composer({
   onSend,
   disabled,
   busy,
   topicId,
+  onTopicChange,
   showContext = true,
-  placeholder = 'Ask EDU anything about your material…',
+  placeholder = 'Message EDU…',
 }: {
   onSend: (message: string) => void;
   disabled?: boolean;
   busy?: boolean;
   topicId?: string | null;
+  /** Present on the home composer, where the thread's topic can be switched. */
+  onTopicChange?: (topicId: string | null) => void;
   showContext?: boolean;
   placeholder?: string;
 }) {
   const [value, setValue] = useState('');
-  const router = useRouter();
   const { material, materials, setMaterialId } = useCurrentMaterial();
-  const createSet = useCreatePracticeSet();
+  const { openUpload } = useUploadDialog();
+  const topics = useTopics(showContext ? (material?.id ?? null) : null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!value.trim() || disabled) return;
+    if (!value.trim() || disabled || busy) return;
     onSend(value.trim());
     setValue('');
   };
 
-  const makeQuestions = () => {
-    if (!material) return;
-    createSet.mutate(
-      {
-        materialId: material.id,
-        kind: topicId ? 'focused' : 'diagnostic',
-        ...(topicId ? { topicId } : {}),
-        count: 5,
-      },
-      { onSuccess: (set) => router.push(`/practice/${set.id}`) },
-    );
-  };
-
   return (
-    <form onSubmit={submit} className="border-t border-line bg-surface px-3 py-3 sm:px-5">
-      <div className="mb-2 flex flex-wrap gap-1.5">
-        {QUICK_ACTIONS.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            disabled={disabled}
-            onClick={() => onSend(action.prompt)}
-            className="min-h-9 rounded-full border border-line bg-surface px-3 text-xs font-medium text-ink hover:bg-surface-sunken disabled:opacity-50"
-          >
-            {action.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          disabled={!material || createSet.isPending}
-          onClick={makeQuestions}
-          className="min-h-9 rounded-full border border-lime bg-lime-soft px-3 text-xs font-semibold text-ink hover:bg-lime disabled:opacity-50"
-        >
-          {createSet.isPending ? 'Building questions…' : 'Make practice questions'}
-        </button>
-      </div>
-
-      {createSet.isError ? (
-        <ErrorState className="mb-2" error={createSet.error} onRetry={makeQuestions} />
-      ) : null}
-
-      <div className="rounded-lg border border-line-strong bg-surface focus-within:border-nav">
+    <form onSubmit={submit} className="px-3 pb-3 sm:px-5">
+      <div className="rounded-xl border border-line-strong bg-surface shadow-card focus-within:border-nav">
         <label htmlFor="agent-input" className="sr-only">
-          Ask EducLM about this material
+          Message EDU about your material
         </label>
-        <div className="flex items-end gap-2 px-2.5 pt-2">
-          <textarea
-            id="agent-input"
-            rows={1}
-            value={value}
-            disabled={disabled}
-            placeholder={placeholder}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                submit(event);
-              }
-            }}
-            className="max-h-40 min-h-11 w-full resize-none bg-transparent py-2 text-sm text-ink outline-none placeholder:text-ink-subtle"
-          />
+
+        <textarea
+          id="agent-input"
+          rows={1}
+          value={value}
+          disabled={disabled}
+          placeholder={placeholder}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              submit(event);
+            }
+          }}
+          className="max-h-40 min-h-12 w-full resize-none bg-transparent px-4 pt-3.5 text-sm text-ink outline-none placeholder:text-ink-subtle"
+        />
+
+        <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pt-1">
+          <button
+            type="button"
+            onClick={openUpload}
+            aria-label="Add a material"
+            title="Add a material"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+          >
+            <PlusIcon />
+          </button>
+
+          {showContext && materials.length > 0 ? (
+            <>
+              <ContextPill>
+                <label htmlFor="material-context" className="sr-only">
+                  Material EDU answers from
+                </label>
+                <select
+                  id="material-context"
+                  value={material?.id ?? ''}
+                  onChange={(event) => {
+                    setMaterialId(event.target.value);
+                    onTopicChange?.(null);
+                  }}
+                  className="max-w-[9rem] cursor-pointer truncate bg-transparent pr-1 text-xs font-medium text-ink outline-none sm:max-w-[14rem]"
+                >
+                  {materials.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.title}
+                    </option>
+                  ))}
+                </select>
+              </ContextPill>
+
+              {onTopicChange && (topics.data ?? []).length > 0 ? (
+                <ContextPill>
+                  <label htmlFor="topic-context" className="sr-only">
+                    Topic this conversation is about
+                  </label>
+                  <select
+                    id="topic-context"
+                    value={topicId ?? ''}
+                    onChange={(event) => onTopicChange(event.target.value || null)}
+                    className="max-w-[9rem] cursor-pointer truncate bg-transparent pr-1 text-xs font-medium text-ink outline-none sm:max-w-[14rem]"
+                  >
+                    <option value="">All topics</option>
+                    {(topics.data ?? []).map((topic) => (
+                      <option key={topic.id} value={topic.id}>
+                        {topic.name}
+                      </option>
+                    ))}
+                  </select>
+                </ContextPill>
+              ) : null}
+            </>
+          ) : null}
 
           <button
             type="submit"
             disabled={disabled || busy || !value.trim()}
             aria-label={busy ? 'Answering' : 'Send message'}
             className={cn(
-              'mb-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lime text-lime-ink transition-colors hover:bg-lime-strong',
+              'ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lime text-lime-ink transition-colors hover:bg-lime-strong',
               'disabled:cursor-not-allowed disabled:opacity-50',
             )}
           >
             <SendIcon />
           </button>
         </div>
-
-        <div className="flex flex-wrap items-center gap-1 border-t border-line px-1.5 py-1.5">
-          <Link href="/upload" prefetch={false} className={TOOL}>
-            <AttachIcon />
-            Attach
-          </Link>
-
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            title="Voice input — not in this build"
-            className={cn(TOOL, 'cursor-not-allowed opacity-60 hover:bg-transparent')}
-          >
-            <MicIcon />
-            Voice
-            <span className="sr-only"> — not in this build</span>
-          </button>
-
-          {showContext && materials.length > 0 ? (
-            <span className="ml-auto inline-flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
-              <label htmlFor="material-context" className="shrink-0">
-                Context
-              </label>
-              <select
-                id="material-context"
-                value={material?.id ?? ''}
-                onChange={(event) => setMaterialId(event.target.value)}
-                className="min-h-9 max-w-[9rem] truncate rounded-md border border-line bg-surface px-2 text-xs text-ink sm:max-w-[15rem]"
-              >
-                {materials.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.title}
-                  </option>
-                ))}
-              </select>
-            </span>
-          ) : null}
-        </div>
       </div>
+
+      <p className="mt-2 text-center text-xs text-ink-subtle">
+        AI can make mistakes. Consider checking important information.
+      </p>
     </form>
+  );
+}
+
+function ContextPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex min-h-9 items-center gap-1 rounded-full border border-lime bg-lime-soft px-3">
+      {children}
+      <ChevronDownIcon
+        width="0.9em"
+        height="0.9em"
+        aria-hidden="true"
+        className="shrink-0 text-ink-muted"
+      />
+    </span>
   );
 }

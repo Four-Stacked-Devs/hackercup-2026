@@ -67,9 +67,19 @@ export interface StreamingAnswer {
  * answer as it arrives token by token, and the citations that land just before
  * the stream closes. Settled messages live in the query cache.
  */
-export function useChatStream(materialId: string | null) {
+export interface ChatStreamOptions {
+  /**
+   * Called with the assistant message the stream settled on. The sidebar uses
+   * it to record which topic the exchange belonged to — the API does not
+   * return `topicId` on a message, so this is the only moment that is known.
+   */
+  onAssistantMessage?: (message: ChatMessage, topicId: string | null) => void;
+}
+
+export function useChatStream(materialId: string | null, options: ChatStreamOptions = {}) {
   const queryClient = useQueryClient();
   const abortRef = useRef<AbortController | null>(null);
+  const onAssistantMessage = options.onAssistantMessage;
 
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [answer, setAnswer] = useState<StreamingAnswer | null>(null);
@@ -98,15 +108,17 @@ export function useChatStream(materialId: string | null) {
           onCitations: (citations) =>
             setAnswer((current) => ({ content: current?.content ?? '', citations })),
           onDone: (assistantMessage) => {
-            // The server persisted both turns; refetch so the panel shows
-            // exactly what a reload would show.
-            void queryClient.invalidateQueries({ queryKey: queryKeys.chat(materialId) });
-            queryClient.setQueryData<ChatMessage[]>(
-              queryKeys.chat(materialId),
-              (current) => [...(current ?? []), assistantMessage],
-            );
-            setPendingQuestion(null);
-            setAnswer(null);
+            onAssistantMessage?.(assistantMessage, topicId ?? null);
+
+            // The server persisted both turns. Hold the streamed answer and the
+            // optimistic question on screen until the refetch has landed —
+            // clearing them first blanks the exchange for a frame.
+            void queryClient
+              .invalidateQueries({ queryKey: queryKeys.chat(materialId) })
+              .finally(() => {
+                setPendingQuestion(null);
+                setAnswer(null);
+              });
           },
           onError: (streamError) => {
             setError(streamError.message);
@@ -115,7 +127,7 @@ export function useChatStream(materialId: string | null) {
         },
       );
     },
-    [materialId, queryClient],
+    [materialId, queryClient, onAssistantMessage],
   );
 
   const stop = useCallback(() => {

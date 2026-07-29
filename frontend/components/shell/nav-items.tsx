@@ -2,14 +2,11 @@
 
 import type { ComponentType, SVGProps } from 'react';
 import {
-  BookIcon,
+  AnalyticsIcon,
   ChatIcon,
+  CompassIcon,
   GridIcon,
-  HomeIcon,
-  LibraryIcon,
-  MenuIcon,
   PlanIcon,
-  PracticeIcon,
   ProgressIcon,
 } from '@/components/ui/icons';
 
@@ -24,35 +21,33 @@ export interface NavItem {
 }
 
 /**
- * The desktop rail. Items the API cannot back are kept in place and disabled
- * rather than quietly removed — the shape of the product stays legible, and
- * nothing on screen pretends to work.
+ * The rail.
+ *
+ * Four destinations under the New Chat action, matching the product mockups:
+ * Explorer, Plan, Analytics, Progress. Settings is reachable from the account
+ * row and the header's display popover, so it does not take a rail slot.
+ *
+ * The reader, the practice runner and the source viewer are deliberately not
+ * here. They open from a conversation, a plan step or a material card, so they
+ * arrive with the context that sent you there.
  */
 export function railNav(materialId: string | null): NavItem[] {
   return [
-    { key: 'home', label: 'Home', icon: HomeIcon, href: '/' },
-    {
-      key: 'conversations',
-      label: 'Conversations',
-      icon: ChatIcon,
-      href: null,
-      unavailableReason:
-        'One conversation per material in this build — the API keeps a single thread.',
-    },
-    {
-      key: 'learn',
-      label: 'Learn',
-      icon: BookIcon,
-      href: materialId ? `/study/${materialId}` : '/library',
-    },
+    { key: 'explorer', label: 'Course Explorer', icon: CompassIcon, href: '/materials' },
     {
       key: 'plan',
-      label: 'Learning plan',
+      label: 'Learning Plan',
       icon: PlanIcon,
       href: materialId ? `/plan/${materialId}` : null,
       ...(materialId ? {} : { unavailableReason: 'Add a material to build a plan.' }),
     },
-    { key: 'practice', label: 'Practice', icon: PracticeIcon, href: '/practice' },
+    {
+      key: 'analytics',
+      label: 'Analytics',
+      icon: AnalyticsIcon,
+      href: materialId ? `/analytics/${materialId}` : null,
+      ...(materialId ? {} : { unavailableReason: 'Add a material to see analytics.' }),
+    },
     {
       key: 'progress',
       label: 'Progress',
@@ -60,30 +55,35 @@ export function railNav(materialId: string | null): NavItem[] {
       href: materialId ? `/progress/${materialId}` : null,
       ...(materialId ? {} : { unavailableReason: 'Add a material to see progress.' }),
     },
-    { key: 'library', label: 'Library', icon: LibraryIcon, href: '/library' },
   ];
 }
 
 /**
- * The five phone tabs. Learn opens the material you are reading; More holds the
- * plan, the library and settings, so the bar stays at five.
+ * The five phone tabs, matching the mockups: Home, Explore, Plan, Analytics,
+ * Progress. Settings and About are reached through the account row and the
+ * header popover instead of a tab.
  */
 export function mobileTabs(materialId: string | null): NavItem[] {
   return [
-    { key: 'home', label: 'Home', icon: HomeIcon, href: '/' },
+    { key: 'chat', label: 'Home', icon: ChatIcon, href: '/' },
+    { key: 'explorer', label: 'Explore', icon: GridIcon, href: '/materials' },
     {
-      key: 'learn',
-      label: 'Learn',
-      icon: BookIcon,
-      href: materialId ? `/study/${materialId}` : '/library',
+      key: 'plan',
+      label: 'Plan',
+      icon: PlanIcon,
+      href: materialId ? `/plan/${materialId}` : '/materials',
     },
-    { key: 'practice', label: 'Practice', icon: GridIcon, href: '/practice' },
+    {
+      key: 'analytics',
+      label: 'Analytics',
+      icon: AnalyticsIcon,
+      href: materialId ? `/analytics/${materialId}` : '/materials',
+    },
     {
       key: 'progress',
       label: 'Progress',
       icon: ProgressIcon,
-      href: materialId ? `/progress/${materialId}` : '/library',
+      href: materialId ? `/progress/${materialId}` : '/materials',
     },
-    { key: 'more', label: 'More', icon: MenuIcon, href: '/more' },
   ];
 }

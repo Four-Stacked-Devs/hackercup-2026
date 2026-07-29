@@ -47,7 +47,7 @@ export function MoreView() {
       label: 'Library',
       detail: `${materials.length} material${materials.length === 1 ? '' : 's'} on this device`,
       icon: LibraryIcon,
-      href: '/library',
+      href: '/materials',
     },
     {
       key: 'upload',

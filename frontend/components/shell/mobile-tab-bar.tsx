@@ -11,16 +11,18 @@ export function MobileTabBar() {
   const pathname = usePathname();
   const { materialId } = useCurrentMaterial();
 
-  const isActive = (key: string, href: string) => {
-    if (key === 'home') return pathname === '/';
-    if (key === 'learn') return pathname.startsWith('/study') || pathname === '/library';
-    if (key === 'more') {
-      return ['/more', '/settings', '/about', '/plan', '/upload'].some((path) =>
+  // Matched on the tab's own route prefix, not its href: a tab that falls
+  // back to /materials when no material exists must not light up there.
+  const isActive = (key: string) => {
+    if (key === 'chat') return pathname === '/';
+    // The reader and the practice runner are opened from the explorer, so they
+    // keep that tab lit rather than lighting none.
+    if (key === 'explorer') {
+      return ['/materials', '/library', '/study', '/practice', '/upload'].some((path) =>
         pathname.startsWith(path),
       );
     }
-    const base = href.split('?')[0] ?? href;
-    return pathname.startsWith(base);
+    return pathname.startsWith(`/${key}`);
   };
 
   return (
@@ -32,7 +34,7 @@ export function MobileTabBar() {
       {mobileTabs(materialId).map((item) => {
         const Icon = item.icon;
         const href = item.href ?? '/';
-        const active = isActive(item.key, href);
+        const active = isActive(item.key);
 
         return (
           <Link

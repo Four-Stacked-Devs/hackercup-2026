@@ -8,6 +8,7 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { MasteryPill } from '@/components/ui/chip';
 import { EmptyState, ErrorState, SkeletonCard } from '@/components/ui/states';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
+import { useUploadDialog } from '@/components/upload/upload-dialog';
 import { useTopics } from '@/lib/hooks/use-study';
 import { useCreatePracticeSet } from '@/lib/hooks/use-practice';
 
@@ -15,6 +16,7 @@ import { useCreatePracticeSet } from '@/lib/hooks/use-practice';
 export function PracticeStart() {
   const router = useRouter();
   const { material } = useCurrentMaterial();
+  const { openUpload } = useUploadDialog();
   const topics = useTopics(material?.id ?? null);
   const createSet = useCreatePracticeSet();
 
@@ -40,7 +42,7 @@ export function PracticeStart() {
           <EmptyState
             title="Nothing to practise yet"
             description="Add a PDF module and EducLM will build questions from it, one at a time, with the source page behind every answer."
-            action={<ButtonLink href="/upload" variant="primary">Add a material</ButtonLink>}
+            action={<Button variant="primary" onClick={openUpload}>Add a material</Button>}
           />
         ) : (
           <>

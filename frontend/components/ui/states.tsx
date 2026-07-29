@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { isApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
+import { useHealth } from '@/lib/hooks/use-meta';
 import { EduMascot } from '@/components/brand/edu-mascot';
 import { AlertIcon, RefreshIcon } from './icons';
 import { Button } from './button';
@@ -23,6 +24,79 @@ export function SkeletonCard({ lines = 3, className }: { lines?: number; classNa
       {Array.from({ length: lines }, (_, index) => (
         <Skeleton key={index} className={cn('mb-2 h-3', index === lines - 1 && 'w-2/3')} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Shown with a skeleton while the server is unreachable. Quiet by design: the
+ * queries behind the skeleton keep retrying on their own, so this is a note,
+ * not a call to action. Renders nothing while the server is fine.
+ */
+export function ReconnectNote() {
+  const { isError } = useHealth();
+  if (!isError) return null;
+
+  return (
+    <p
+      role="status"
+      className="flex items-center gap-2 px-1 text-xs text-ink-muted"
+    >
+      <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-attention" />
+      Trying to reconnect…
+    </p>
+  );
+}
+
+/**
+ * A whole screen's placeholder, shaped like the layout it stands in for.
+ * Every variant carries the reconnect note so an unreachable server reads as
+ * "loading, and here's why it's slow" rather than as a dead end.
+ */
+export function ScreenSkeleton({
+  variant,
+  className,
+}: {
+  variant: 'chat' | 'grid' | 'list' | 'stats';
+  className?: string;
+}) {
+  return (
+    <div className={cn('space-y-3 p-4', className)} role="status" aria-label="Loading">
+      <ReconnectNote />
+      {variant === 'chat' ? (
+        <>
+          <SkeletonCard lines={2} />
+          <SkeletonCard lines={5} />
+        </>
+      ) : null}
+      {variant === 'grid' ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, index) => (
+            <SkeletonCard key={index} lines={3} />
+          ))}
+        </div>
+      ) : null}
+      {variant === 'list' ? (
+        <>
+          <SkeletonCard lines={1} />
+          {Array.from({ length: 5 }, (_, index) => (
+            <SkeletonCard key={index} lines={2} />
+          ))}
+        </>
+      ) : null}
+      {variant === 'stats' ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <SkeletonCard key={index} lines={2} />
+            ))}
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <SkeletonCard lines={6} />
+            <SkeletonCard lines={6} />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
