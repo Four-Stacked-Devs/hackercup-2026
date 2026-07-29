@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn';
 import { useHealth } from '@/lib/hooks/use-meta';
 import { ChevronLeft } from '@/components/ui/icons';
 import { EduMascot } from '@/components/brand/edu-mascot';
-import { A11yToolbar } from './a11y-toolbar';
+import { DisplaySettings } from './display-settings';
 
 /**
  * One compact row: where you are on the left, the state of the agent and the
@@ -63,7 +63,7 @@ export function WorkspaceHeader({
         {/* On a phone the controls take their own line so the title keeps its width. */}
         <div className="flex basis-full flex-wrap items-center gap-1.5 sm:basis-auto">
           {showStatus ? <AgentStatus /> : null}
-          <A11yToolbar />
+          <DisplaySettings />
           {actions}
         </div>
       </div>
