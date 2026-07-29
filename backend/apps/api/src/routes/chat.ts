@@ -86,8 +86,11 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
       // Writing to the raw socket bypasses Fastify's reply pipeline, which is
       // where @fastify/cors queued its headers — carry them over, or the
       // browser refuses to read the stream cross-origin.
+      for (const [name, value] of Object.entries(reply.getHeaders())) {
+        if (value !== undefined) reply.raw.setHeader(name, value);
+      }
+
       reply.raw.writeHead(200, {
-        ...reply.getHeaders(),
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
