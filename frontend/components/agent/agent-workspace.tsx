@@ -15,6 +15,11 @@ import { useChatStream } from '@/lib/hooks/use-study';
 import { useThreads } from '@/lib/hooks/use-threads';
 import { findThread, findThreadByKey } from '@/lib/threads';
 import { newConversationId } from '@/lib/thread-index';
+import {
+  ProcessingStages,
+  progressOf,
+  type Progress,
+} from '@/components/upload/processing-stages';
 import { Conversation, AgentWorking } from './conversation';
 import { Composer } from './composer';
 import { ActionChips } from './action-chips';
@@ -42,27 +47,21 @@ export function AgentWorkspace() {
 
   if (materials.length === 0 || !material) return <FirstRun />;
 
-  const processing = material.status !== 'ready';
+  /**
+   * A material still being prepared no longer swaps the conversation out for a
+   * status card. New Chat has to land somewhere that looks like a chat, so the
+   * greeting and the thread rail stay put and only sending is held back — the
+   * list poll re-enables it the moment ingestion finishes.
+   */
+  const preparing = material.status === 'ready' ? null : progressOf(material);
 
   return (
     <SourceProvider materialId={material.id}>
-      {processing ? (
-        <>
-          <WorkspaceHeader title={material.title} subtitle="Still being prepared" />
-          <div className="p-4">
-            <Card>
-              <p className="text-sm text-ink">
-                EDU is still reading {material.title}. The agent can answer once it is ready.
-              </p>
-              <ButtonLink variant="outline" size="sm" className="mt-3" href="/materials">
-                See its progress
-              </ButtonLink>
-            </Card>
-          </div>
-        </>
-      ) : (
-        <ConversationColumn materialId={material.id} materialTitle={material.title} />
-      )}
+      <ConversationColumn
+        materialId={material.id}
+        materialTitle={material.title}
+        preparing={preparing}
+      />
     </SourceProvider>
   );
 }
@@ -70,9 +69,12 @@ export function AgentWorkspace() {
 function ConversationColumn({
   materialId,
   materialTitle,
+  preparing,
 }: {
   materialId: string;
   materialTitle: string;
+  /** Ingestion progress while the material is still being prepared, else null. */
+  preparing: Progress | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -146,7 +148,9 @@ function ConversationColumn({
     <>
       <WorkspaceHeader
         title={thread ? thread.title : materialTitle}
-        subtitle={activeTopicId ? materialTitle : 'All topics'}
+        subtitle={
+          preparing ? 'Still being prepared' : activeTopicId ? materialTitle : 'All topics'
+        }
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5">
@@ -163,6 +167,12 @@ function ConversationColumn({
             emptyState={<Greeting />}
           />
 
+          {preparing ? (
+            <Card>
+              <ProcessingStages {...preparing} />
+            </Card>
+          ) : null}
+
           {stream.answer ? <AgentWorking answer={stream.answer} /> : null}
 
           {lastIsAnswer && !stream.answer ? (
@@ -177,11 +187,18 @@ function ConversationColumn({
       </div>
 
       <div className="mx-auto w-full max-w-3xl">
+        {preparing ? (
+          <p className="px-3 pb-1.5 text-xs text-ink-muted sm:px-0" role="status">
+            EDU can answer as soon as {materialTitle} is ready — {preparing.percent}% done.
+          </p>
+        ) : null}
         <Composer
           onSend={(message) => send(message, activeTopicId ?? undefined)}
           busy={stream.isStreaming}
           topicId={activeTopicId}
           onTopicChange={setTopic}
+          disabled={preparing !== null}
+          {...(preparing ? { placeholder: 'Still preparing your material…' } : {})}
         />
       </div>
     </>
