@@ -42,6 +42,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',').map((o) => o.trim()),
     credentials: true,
+    // @fastify/cors defaults to GET,HEAD,POST. That silently fails the
+    // preflight for PATCH /me/preferences and every DELETE route — the browser
+    // blocks the request before it is ever sent, so the server logs nothing.
+    // List every method the API actually serves.
+    methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', DEVICE_ID_HEADER],
     exposedHeaders: ['Content-Type'],
   });
