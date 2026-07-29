@@ -91,6 +91,41 @@ whether it works.
 Embeddings never need a key. `bge-small-en-v1.5` runs in-process via ONNX;
 the ~130 MB model downloads once into `./.models`.
 
+### 3. Deploying to Render (free tier)
+
+`render.yaml` is a Blueprint — Dashboard → **New** → **Blueprint** → pick this
+repo, and Render creates the service and prompts for the three secrets it does
+not store in git (`DATABASE_URL`, `LLM_API_KEY`, `CORS_ORIGIN`).
+
+Run migrations from your machine *first* (§1 above). The deployed service then
+never needs DDL rights, and `DIRECT_URL` is deliberately absent from its
+environment.
+
+Five things in that file are load-bearing, and each one fails confusingly if
+changed:
+
+- **`npm install -g pnpm@11.17.0`, not `corepack enable`** — corepack writes its
+  shims into `/usr/bin`, which is read-only on Render's image. It dies with
+  `EROFS: read-only file system, unlink '/usr/bin/pnpm'`.
+- **`backend/.node-version`** — root `package.json` says `engines: ">=20"`, and
+  Render resolves that open range to the newest Node released, which is not a
+  version this has been tested on. Precedence is `NODE_VERSION` env var, then
+  `.node-version`, then `engines`.
+- **`pnpm install --prod=false`** — Render sets `NODE_ENV=production`, which
+  makes pnpm skip `devDependencies`. `typescript`, `tsx` and the `prisma` CLI
+  all live there.
+- **`EMBEDDING_DTYPE=q8`** — the free instance is 512 MB. fp32 weights are
+  ~130 MB resident alongside Node, Fastify, Prisma and `unpdf` page buffers.
+- **`pnpm --filter` in both `buildCommand` and `startCommand`** — it sets the
+  working directory to `apps/api`, and `EMBEDDING_CACHE_DIR` is the relative
+  `./.models`. A different cwd at start silently misses what the build cached
+  and re-downloads the model on every boot.
+
+Free instances sleep after 15 minutes idle and cold-start in 30–60s; at 0.1 CPU,
+ingest demo material ahead of time rather than live. `.uploads/` is ephemeral,
+which `getFile` tolerates because it is only read during ingestion — but a
+restart between upload and ingestion strands that material.
+
 ---
 
 ## Commands
@@ -184,10 +219,23 @@ The seed *computes* those bands with the real analytics functions and throws if
 they ever stop matching, so the demo cannot quietly drift from what section 12
 promises.
 
-**Not yet verified:** nothing has been run against a live Supabase instance or a
-real Groq key — no project or key existed at build time. The migration SQL is
-verified against real Postgres (via PGlite), and both adapters are wired and
-typechecked, but the Supabase and Groq paths are untested in practice.
+**Verified against live Supabase on 2026-07-29.** `prisma migrate deploy` and the
+seed both ran against the project in `ap-southeast-1`: pgvector 0.8.2,
+`Chunk.embedding vector(384)`, the ivfflat index, all 16 tables, and the section
+12 bands reproduced. The running server was then checked on the *other*
+connection path — migrations use `DIRECT_URL`, the server uses `DATABASE_URL` —
+and `/meta/health` reported `database=postgres  llm=groq:llama-3.3-70b-versatile`
+with `/progress/overview` returning real computed mastery.
+
+| Precision | File | Identical | Paraphrase | Same-topic | Unrelated | Ranking |
+|---|---|---|---|---|---|---|
+| `fp32` | 127 MB | 1.000 | 0.834 | 0.688 | 0.457 | 0 > 1 > 2 > 3 |
+| `q8` | 33 MB | 1.000 | 0.834 | 0.694 | 0.471 | 0 > 1 > 2 > 3 |
+
+Measured on a different sentence set than the row above, so compare the two rows
+to each other, not to the 0.97/0.73/0.29 figures. Quantising costs at most 0.014
+of cosine similarity and does not reorder retrieval results — which is what
+makes `EMBEDDING_DTYPE=q8` an acceptable trade for a 512 MB container.
 
 ---
 

@@ -40,6 +40,17 @@ const rawEnvSchema = z.object({
   EMBEDDING_MODEL: z.string().default('Xenova/bge-small-en-v1.5'),
   EMBEDDING_DIMS: z.coerce.number().int().positive().default(384),
   EMBEDDING_CACHE_DIR: z.string().default('./.models'),
+  /**
+   * ONNX weight precision for the local embedder.
+   *
+   * `fp32` is the default because it is the reference quality the retrieval
+   * numbers in README "Verification" were measured against. `q8` quantises the
+   * weights to int8 — roughly a quarter of the memory (~33MB instead of
+   * ~130MB), which is what makes the model fit alongside Node, Fastify and
+   * Prisma inside a 512MB free-tier container. Retrieval quality drops
+   * slightly; it is a deploy-time trade, not the local default.
+   */
+  EMBEDDING_DTYPE: z.enum(['fp32', 'fp16', 'q8', 'int8', 'uint8', 'q4']).default('fp32'),
   OPENAI_API_KEY: optionalSetting,
 
   // Uploads
@@ -113,7 +124,7 @@ export function describeMode(): string {
     env.embeddingProvider === 'stub'
       ? 'stub (deterministic hashed vectors)'
       : env.embeddingProvider === 'local'
-        ? `local ${env.EMBEDDING_MODEL} (${VECTOR_DIMS}d)`
+        ? `local ${env.EMBEDDING_MODEL} (${VECTOR_DIMS}d, ${env.EMBEDDING_DTYPE})`
         : `openai ${env.EMBEDDING_MODEL}`;
   return `db=${db}  llm=${llm}  embeddings=${emb}`;
 }
