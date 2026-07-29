@@ -11,8 +11,8 @@ export function PlanScreen({ materialId }: { materialId: string }) {
   return (
     <>
       <WorkspaceHeader
-        title="Learning plan"
-        subtitle={material.data?.title ?? undefined}
+        title="Your Learning Plan"
+        subtitle="A study plan generated with EDU, adapted as you practise"
         backHref="/"
         backLabel="Agent"
       />
