@@ -369,10 +369,15 @@ model ChatMessage {
   content    String
   citations  Json // Citation[]
   topicId    String?
-  createdAt  DateTime @default(now())
+  // The thread the client opened this turn in. Null for messages written before
+  // threading moved to the server, which the client still groups from its local
+  // index.
+  conversationId String?
+  createdAt      DateTime @default(now())
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   @@index([materialId, createdAt])
+  @@index([materialId, conversationId])
 }
