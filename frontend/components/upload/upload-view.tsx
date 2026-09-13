@@ -158,9 +158,10 @@ export function UploadView({ onRequestClose }: { onRequestClose?: () => void }) 
             size="lg"
             className="mt-4"
             onClick={() => inputRef.current?.click()}
-            disabled={upload.isPending}
+            loading={upload.isPending}
+            loadingText="Uploading…"
           >
-            {upload.isPending ? 'Uploading…' : 'Choose a PDF'}
+            Choose a PDF
           </Button>
         </div>
 

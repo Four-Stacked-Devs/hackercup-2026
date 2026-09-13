@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Markdown } from '@/components/ui/markdown';
 import { ErrorState, Skeleton } from '@/components/ui/states';
+import { Spinner } from '@/components/ui/spinner';
 import { ClockIcon, PauseIcon, SpeakerIcon } from '@/components/ui/icons';
 import { PageRef } from '@/components/source/source-sheet';
 import { usePreferences } from '@/components/providers/preferences-provider';
@@ -90,9 +91,11 @@ function DraftNotice({ status }: { status: Lesson['status'] }) {
   return (
     <p
       role="status"
-      className="mb-6 rounded-md border border-line bg-surface-sunken px-3 py-2 text-sm text-ink-muted"
+      className="mb-6 flex items-start gap-2 rounded-md border border-line bg-surface-sunken px-3 py-2 text-sm text-ink-muted"
     >
-      {message}
+      {/* Only while something is actually happening: a failed topic is final. */}
+      {status === 'failed' ? null : <Spinner size="sm" className="mt-0.5" />}
+      <span>{message}</span>
     </p>
   );
 }

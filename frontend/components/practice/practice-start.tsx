@@ -54,9 +54,10 @@ export function PracticeStart() {
               <Button
                 variant="primary"
                 onClick={() => start('diagnostic')}
-                disabled={createSet.isPending}
+                loading={createSet.isPending}
+                loadingText="Opening…"
               >
-                {createSet.isPending ? 'Building your questions…' : 'Start a diagnostic set'}
+                Start a diagnostic set
               </Button>
             </Card>
 

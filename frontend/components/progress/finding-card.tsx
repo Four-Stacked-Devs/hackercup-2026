@@ -70,9 +70,10 @@ export function FindingCard({
               variant="primary"
               size="sm"
               onClick={startFocusedPractice}
-              disabled={createSet.isPending}
+              loading={createSet.isPending}
+              loadingText="Opening…"
             >
-              {createSet.isPending ? 'Building questions…' : 'Practise this now'}
+              Practise this now
             </Button>
 
             <Button

@@ -5,10 +5,13 @@ import type { ChatMessage } from '@educlm/contracts';
 import { Markdown } from '@/components/ui/markdown';
 import { ErrorState, Skeleton } from '@/components/ui/states';
 import { CheckIcon, CopyIcon, WorkingDots } from '@/components/ui/icons';
+import { Spinner } from '@/components/ui/spinner';
 import { CitationChip } from '@/components/source/source-sheet';
 import { EduMascot } from '@/components/brand/edu-mascot';
 import { clockTime } from '@/lib/format';
 import type { StreamingAnswer } from '@/lib/hooks/use-study';
+import { useElapsedSeconds } from '@/lib/hooks/use-elapsed';
+import { tipsFor } from '@/lib/tips';
 
 /**
  * The conversation.
@@ -192,28 +195,55 @@ function StreamingRow({ answer }: { answer: StreamingAnswer }) {
  */
 export function AgentWorking({ answer }: { answer: StreamingAnswer | null }) {
   if (!answer) return null;
+  return <AgentWorkingSteps answer={answer} />;
+}
+
+/** Split out so the elapsed timer starts with each answer, not with the page. */
+function AgentWorkingSteps({ answer }: { answer: StreamingAnswer }) {
+  const elapsed = useElapsedSeconds(SLOW_ANSWER_SECONDS + 1);
 
   const steps = [
     { label: 'Searching your material', done: true },
     { label: 'Reading the matching pages', done: answer.content.length > 0 },
     { label: 'Writing the answer with sources', done: answer.citations.length > 0 },
   ];
+  // The first unfinished step is the one running; the rest are waiting.
+  const running = steps.findIndex((step) => !step.done);
+
+  // Nothing streamed yet after a while: usually the free tier's per-minute
+  // limit. Say so, and give the student something to read in the meantime.
+  const slow = answer.content.length === 0 && elapsed >= SLOW_ANSWER_SECONDS;
+  const chatTips = tipsFor('chat');
 
   return (
-    <ul className="m-0 flex list-none flex-wrap gap-1.5" aria-label="What the agent is doing">
-      {steps.map((step) => (
-        <li
-          key={step.label}
-          className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink-muted"
-        >
-          {step.done ? (
-            <CheckIcon width="0.9em" height="0.9em" className="text-strong" />
-          ) : (
-            <WorkingDots className="text-ink" />
-          )}
-          {step.label}
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-1.5">
+      <ul className="m-0 flex list-none flex-wrap gap-1.5" aria-label="What the agent is doing">
+        {steps.map((step, index) => (
+          <li
+            key={step.label}
+            className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink-muted"
+          >
+            {step.done ? (
+              <CheckIcon width="0.9em" height="0.9em" className="text-strong" />
+            ) : index === running ? (
+              <Spinner size="sm" className="text-ink" />
+            ) : (
+              <WorkingDots className="text-ink-subtle" />
+            )}
+            {step.label}
+          </li>
+        ))}
+      </ul>
+
+      {slow ? (
+        <p className="m-0 text-xs text-ink-muted">
+          Still reading — this can take a little longer on the free AI tier.{' '}
+          {chatTips[Math.floor(elapsed / SLOW_ANSWER_SECONDS) % chatTips.length]}
+        </p>
+      ) : null}
+    </div>
   );
 }
+
+/** Seconds without a streamed word before the wait explains itself. */
+const SLOW_ANSWER_SECONDS = 8;

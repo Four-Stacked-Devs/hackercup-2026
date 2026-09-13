@@ -295,9 +295,10 @@ function WhatChanged({ plan, materialId }: { plan: LearningPlan; materialId: str
             size="sm"
             className="mt-3"
             onClick={() => revert.mutate()}
-            disabled={revert.isPending}
+            loading={revert.isPending}
+            loadingText="Restoring…"
           >
-            {revert.isPending ? 'Restoring…' : 'Go back to the original plan'}
+            Go back to the original plan
           </Button>
 
           {revert.isError ? (
@@ -421,8 +422,8 @@ export function StartPracticeButton({
 
   return (
     <>
-      <Button variant="primary" onClick={start} disabled={createSet.isPending}>
-        {createSet.isPending ? 'Building your questions…' : label}
+      <Button variant="primary" onClick={start} loading={createSet.isPending} loadingText="Opening…">
+        {label}
       </Button>
       {createSet.isError ? (
         <ErrorState className="mt-3 w-full" error={createSet.error} onRetry={start} />

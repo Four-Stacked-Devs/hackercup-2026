@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
+import { Spinner } from './spinner';
 
 type Variant = 'primary' | 'dark' | 'outline' | 'ghost' | 'danger' | 'nav';
 type Size = 'sm' | 'md' | 'lg';
@@ -29,22 +30,37 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   full?: boolean;
+  /** Work is running: shows a spinner, disables the button, marks it busy. */
+  loading?: boolean;
+  /** What the button says while it works. Defaults to its own label. */
+  loadingText?: ReactNode;
 }
 
 export function Button({
   variant = 'outline',
   size = 'md',
   full = false,
+  loading = false,
+  loadingText,
   className,
   type = 'button',
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
   return (
     <button
       type={type}
       className={cn(BASE, VARIANTS[variant], SIZES[size], full && 'w-full', className)}
+      // Busy rather than merely disabled: a disabled button says nothing about
+      // why, and a caller that sets `loading` always means "in progress".
+      aria-busy={loading || undefined}
+      disabled={disabled || loading}
       {...props}
-    />
+    >
+      {loading ? <Spinner size={size === 'sm' ? 'sm' : 'md'} /> : null}
+      {loading && loadingText !== undefined ? loadingText : children}
+    </button>
   );
 }
 

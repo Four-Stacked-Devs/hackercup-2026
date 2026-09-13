@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCreatePracticeSet } from '@/lib/hooks/use-practice';
 import { ErrorState } from '@/components/ui/states';
 import { ExamplesIcon, PlanIcon, QuizIcon, SimplifyIcon } from '@/components/ui/icons';
+import { Spinner } from '@/components/ui/spinner';
 
 /**
  * The follow-ups offered under EDU's last answer.
@@ -34,9 +35,10 @@ export function ActionChips({
       <ul className="m-0 flex list-none flex-wrap gap-2">
         <li>
           <Chip
-            icon={<QuizIcon />}
-            label={building ? 'Building your questions…' : 'Create quiz'}
+            icon={building ? <Spinner size="sm" /> : <QuizIcon />}
+            label={building ? 'Opening your quiz…' : 'Create quiz'}
             disabled={building}
+            busy={building}
             onClick={() =>
               createSet.mutate(
                 {
@@ -89,17 +91,20 @@ function Chip({
   label,
   onClick,
   disabled,
+  busy = false,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  busy?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-busy={busy || undefined}
       className="flex min-h-9 items-center gap-2 rounded-full border border-line bg-surface px-3.5 text-sm text-ink transition-colors hover:border-line-strong hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span className="text-ink-muted">{icon}</span>

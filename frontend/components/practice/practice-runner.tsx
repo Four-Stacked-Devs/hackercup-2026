@@ -14,6 +14,8 @@ import { Chip } from '@/components/ui/chip';
 import { Meter, ProgressBar, ProgressRing, StatTile, StepProgress } from '@/components/ui/charts';
 import { Markdown } from '@/components/ui/markdown';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/states';
+import { LoadingTips } from '@/components/ui/loading-tips';
+import { Spinner } from '@/components/ui/spinner';
 import { AlertIcon, CheckIcon, CloseIcon } from '@/components/ui/icons';
 import { EduMascot, EduSays } from '@/components/brand/edu-mascot';
 import { CitationChip, PageRef } from '@/components/source/source-sheet';
@@ -65,14 +67,17 @@ export function PracticeRunner({ setId }: { setId: string }) {
  * The set exists but its questions are still being written. The query polls,
  * so this turns into the runner by itself the moment they are ready.
  */
-function GeneratingView({ set }: { set: PracticeSet }) {
+export function GeneratingView({ set }: { set: PracticeSet }) {
   const ready = set.questions.length;
   const target = Math.max(set.targetCount, 1);
 
   return (
     <Card>
       <div role="status" aria-live="polite">
-        <p className="font-display font-bold text-ink">Building your questions</p>
+        <p className="flex items-center gap-2 font-display font-bold text-ink">
+          <Spinner size="md" className="text-ink-muted" />
+          Building your questions
+        </p>
         <p className="mt-1 text-sm text-ink-muted">
           EDU is writing {target} question{target === 1 ? '' : 's'} from your material. They open
           here as soon as they are ready — you can leave this page and come back.
@@ -89,6 +94,12 @@ function GeneratingView({ set }: { set: PracticeSet }) {
           </p>
         ) : null}
       </div>
+
+      <LoadingTips
+        topic="practice"
+        className="mt-4"
+        longWaitNote="Still writing — on a free AI tier a set can take a minute or two. It opens here by itself, and it keeps going if you leave."
+      />
     </Card>
   );
 }
@@ -115,8 +126,8 @@ function FailedView({ set }: { set: PracticeSet }) {
         title="EDU could not build these questions"
         description="Something went wrong while writing questions from your material. Try again — it usually works the second time."
         action={
-          <Button variant="primary" onClick={retry} disabled={createSet.isPending}>
-            {createSet.isPending ? 'Starting…' : 'Try again'}
+          <Button variant="primary" onClick={retry} loading={createSet.isPending} loadingText="Starting…">
+            Try again
           </Button>
         }
       />
@@ -231,8 +242,14 @@ function RunnerBody({ set }: { set: PracticeSet }) {
 
       <div className="flex flex-wrap gap-2">
         {feedback ? (
-          <Button variant="primary" size="lg" onClick={next} disabled={complete.isPending}>
-            {complete.isPending ? 'Finishing…' : isLast ? 'See your results' : 'Next question'}
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={next}
+            loading={complete.isPending}
+            loadingText="Finishing…"
+          >
+            {isLast ? 'See your results' : 'Next question'}
           </Button>
         ) : (
           <>
@@ -240,9 +257,11 @@ function RunnerBody({ set }: { set: PracticeSet }) {
               variant="primary"
               size="lg"
               onClick={check}
-              disabled={!selected || submit.isPending}
+              disabled={!selected}
+              loading={submit.isPending}
+              loadingText="Checking…"
             >
-              {submit.isPending ? 'Checking…' : 'Check answer'}
+              Check answer
             </Button>
             <ButtonLink
               href={`/study/${set.materialId}?topicId=${question.topicId}`}

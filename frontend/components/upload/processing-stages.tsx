@@ -3,6 +3,8 @@
 import type { IngestionStage } from '@educlm/contracts';
 import { ProgressBar } from '@/components/ui/charts';
 import { CheckIcon } from '@/components/ui/icons';
+import { LoadingTips } from '@/components/ui/loading-tips';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/cn';
 
 /**
@@ -20,7 +22,7 @@ export const STAGE_LABEL: Record<IngestionStage, string> = {
   chunking: 'Splitting the text into passages',
   extracting_topics: 'Finding the topics',
   embedding: 'Indexing it so answers can cite a page',
-  building_lessons: 'Building the accessible lesson',
+  building_lessons: 'Laying out a first draft of each lesson',
   done: 'Ready',
 };
 
@@ -54,8 +56,19 @@ export function progressOf(
   };
 }
 
-/** The full list, for the upload panel and the chat screen. This is not a spinner. */
-export function ProcessingStages({ stage, percent, message }: Progress) {
+/**
+ * The full list, for the upload panel and the chat screen. The spinner marks
+ * the stage that is running; the list says what the stages are.
+ */
+export function ProcessingStages({
+  stage,
+  percent,
+  message,
+  tips = true,
+}: Progress & {
+  /** Rotating tips under the list. Off where the space is tight. */
+  tips?: boolean;
+}) {
   const currentIndex = STAGE_ORDER.indexOf(stage);
 
   return (
@@ -95,13 +108,25 @@ export function ProcessingStages({ stage, percent, message }: Progress) {
                       : 'border-line',
                 )}
               >
-                {done ? <CheckIcon width="0.8em" height="0.8em" /> : null}
+                {done ? (
+                  <CheckIcon width="0.8em" height="0.8em" />
+                ) : active ? (
+                  <Spinner size="sm" className="text-white" />
+                ) : null}
               </span>
               {STAGE_LABEL[entry]}
             </li>
           );
         })}
       </ol>
+
+      {tips ? (
+        <LoadingTips
+          topic="upload"
+          className="mt-4"
+          longWaitNote="Taking a while? Long files and free AI tiers can need a few minutes. You can leave this page — preparation keeps going, and the material opens by itself when it is ready."
+        />
+      ) : null}
     </div>
   );
 }
