@@ -10,7 +10,7 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { MasteryPill } from '@/components/ui/chip';
 import { ProgressBar } from '@/components/ui/charts';
 import { ConfirmDialog } from '@/components/ui/sheet';
-import { EmptyState, ErrorState, ScreenSkeleton } from '@/components/ui/states';
+import { EmptyState, ErrorState, ScreenSkeleton, Skeleton } from '@/components/ui/states';
 import { DocIcon, SearchIcon, TrashIcon, UploadIcon } from '@/components/ui/icons';
 import { EduMascot } from '@/components/brand/edu-mascot';
 import { useCurrentMaterial } from '@/components/providers/material-provider';
@@ -18,7 +18,10 @@ import { useUploadDialog } from '@/components/upload/upload-dialog';
 import { ProcessingSummary, progressOf } from '@/components/upload/processing-stages';
 import { useDeleteMaterial } from '@/lib/hooks/use-materials';
 import { useProgressOverview } from '@/lib/hooks/use-progress';
-import { useMaterialsProgress, type MaterialProgress } from '@/lib/hooks/use-materials-progress';
+import {
+  useMaterialsProgress,
+  type MaterialProgressState,
+} from '@/lib/hooks/use-materials-progress';
 import { MASTERY_BAR, percent, timeAgo } from '@/lib/format';
 import { coverFor } from './cover';
 
@@ -31,7 +34,8 @@ import { coverFor } from './cover';
  * ones the API can actually answer: topics, answers given, mastery, recency.
  */
 export function ExplorerView() {
-  const { materials, setMaterialId, isLoading, error, refetch } = useCurrentMaterial();
+  const { materials, setMaterialId, isLoading, isSettled, error, refetch } =
+    useCurrentMaterial();
   const [pendingDelete, setPendingDelete] = useState<Material | null>(null);
   const [query, setQuery] = useState('');
   const remove = useDeleteMaterial();
@@ -63,7 +67,10 @@ export function ExplorerView() {
       />
 
       <div className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-3 py-5 sm:px-5">
-        {isLoading ? (
+        {/* `isSettled`, not `!isLoading`: while the server is unreachable the
+            query reports neither loading nor error, so this branch order used
+            to tell a student with a full library that they had nothing. */}
+        {!isSettled && !error ? (
           <ScreenSkeleton variant="grid" className="p-0" />
         ) : error ? (
           <ErrorState error={error} onRetry={refetch} />
@@ -161,7 +168,7 @@ function MaterialCard({
   onDelete,
 }: {
   material: Material;
-  progress: MaterialProgress | undefined;
+  progress: MaterialProgressState | undefined;
   onOpen: () => void;
   onDelete: () => void;
 }) {
@@ -192,7 +199,9 @@ function MaterialCard({
 
         <p className="text-xs text-ink-muted">
           {ready
-            ? `${material.topicCount} topics · ${material.pageCount ?? 0} pages`
+            ? material.pageCount === null
+              ? `${material.topicCount} topics`
+              : `${material.topicCount} topics · ${material.pageCount} pages`
             : failed
               ? 'Could not be prepared'
               : 'Being prepared'}
@@ -209,28 +218,48 @@ function MaterialCard({
           </p>
         ) : !ready ? (
           <ProcessingSummary {...progressOf(material)} className="mt-auto" />
-        ) : progress && progress.responseCount > 0 ? (
+        ) : progress === undefined || progress.status === 'loading' ? (
+          // Not "no answers yet" — we do not know yet. Saying the former to a
+          // student who has been working is worse than saying nothing.
+          <Skeleton className="mt-auto h-3.5 w-2/3" />
+        ) : progress.status === 'error' ? (
+          <p className="mt-auto text-xs text-ink-muted">Progress didn&apos;t load</p>
+        ) : progress.progress.responseCount > 0 ? (
           <>
             <div className="mt-auto flex items-center gap-2">
               <span className="min-w-0 flex-1">
                 <ProgressBar
-                  value={progress.accuracy ?? 0}
+                  value={progress.progress.accuracy ?? 0}
                   label={`${material.title} accuracy`}
-                  tone={progress.weakestBand ? MASTERY_BAR[progress.weakestBand] : 'neutral'}
+                  tone={
+                    progress.progress.weakestBand
+                      ? MASTERY_BAR[progress.progress.weakestBand]
+                      : 'neutral'
+                  }
                 />
               </span>
               <span className="text-xs font-semibold tabular-nums text-ink">
-                {percent(progress.accuracy)}
+                {percent(progress.progress.accuracy)}
               </span>
             </div>
-            {progress.weakestBand ? <MasteryPill band={progress.weakestBand} /> : null}
+            {progress.progress.weakestBand ? (
+              <MasteryPill band={progress.progress.weakestBand} />
+            ) : null}
           </>
         ) : (
           <p className="mt-auto text-xs text-ink-subtle">No answers yet</p>
         )}
 
         <Button variant={ready ? 'primary' : 'outline'} size="sm" onClick={onOpen} full>
-          {ready ? (progress?.responseCount ? 'Continue' : 'Start') : 'View progress'}
+          {/* "Start" is a claim that nothing has been done here, so it waits for
+              the figures rather than guessing while they load. */}
+          {ready
+            ? progress?.status === 'ready'
+              ? progress.progress.responseCount > 0
+                ? 'Continue'
+                : 'Start'
+              : 'Open'
+            : 'View progress'}
         </Button>
       </div>
     </Card>
@@ -246,6 +275,11 @@ function EduTip() {
   const { materialId } = useCurrentMaterial();
   const overview = useProgressOverview(materialId);
   const finding = overview.data?.topFinding ?? null;
+
+  // "Answer a few practice questions" is a statement about the student's record.
+  // Making it from a response that has not arrived — or never will — tells a
+  // working student they have not started.
+  const settled = overview.isSuccess;
 
   return (
     <Card className="h-fit border-lime bg-lime-soft">
@@ -268,10 +302,16 @@ function EduTip() {
                 See the evidence
               </Link>
             </>
-          ) : (
+          ) : settled ? (
             <p className="mt-1 text-xs leading-relaxed text-ink">
               Answer a few practice questions and I can point at the exact idea to work on next —
               with the answers that show it.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+              {overview.isError
+                ? 'I could not read your progress just now.'
+                : 'Looking at where you have got to…'}
             </p>
           )}
         </div>
@@ -286,7 +326,7 @@ function MaterialsTable({
   onOpen,
 }: {
   materials: readonly Material[];
-  progress: ReadonlyMap<string, MaterialProgress>;
+  progress: ReadonlyMap<string, MaterialProgressState>;
   onOpen: (material: Material) => void;
 }) {
   return (
@@ -329,24 +369,35 @@ function MaterialsTable({
                     {ready ? material.topicCount : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-ink-muted">
-                    {row?.responseCount ?? (ready ? 0 : '—')}
+                    {/* A dash means "not known", which covers both a material
+                        that is not ready and figures that have not arrived. A
+                        zero here was a claim, and often a wrong one. */}
+                    {row?.status === 'ready' ? row.progress.responseCount : '—'}
                   </td>
                   <td className="px-3 py-2.5">
                     {!ready ? (
                       <span className="text-xs text-ink-muted">
                         {material.status === 'failed' ? 'Failed' : 'Processing'}
                       </span>
-                    ) : row && row.responseCount > 0 ? (
+                    ) : row === undefined || row.status === 'loading' ? (
+                      <Skeleton className="h-3.5 w-24" />
+                    ) : row.status === 'error' ? (
+                      <span className="text-xs text-ink-muted">Didn&apos;t load</span>
+                    ) : row.progress.responseCount > 0 ? (
                       <span className="flex items-center gap-2">
                         <span className="min-w-[5rem] flex-1">
                           <ProgressBar
-                            value={row.accuracy ?? 0}
+                            value={row.progress.accuracy ?? 0}
                             label={`${material.title} accuracy`}
-                            tone={row.weakestBand ? MASTERY_BAR[row.weakestBand] : 'neutral'}
+                            tone={
+                              row.progress.weakestBand
+                                ? MASTERY_BAR[row.progress.weakestBand]
+                                : 'neutral'
+                            }
                           />
                         </span>
                         <span className="text-xs font-semibold tabular-nums text-ink">
-                          {percent(row.accuracy)}
+                          {percent(row.progress.accuracy)}
                         </span>
                       </span>
                     ) : (
@@ -354,7 +405,9 @@ function MaterialsTable({
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-ink-muted">
-                    {row?.lastAnsweredAt ? timeAgo(row.lastAnsweredAt) : '—'}
+                    {row?.status === 'ready' && row.progress.lastAnsweredAt
+                      ? timeAgo(row.progress.lastAnsweredAt)
+                      : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     <Button variant="ghost" size="sm" onClick={() => onOpen(material)}>

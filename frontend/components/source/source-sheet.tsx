@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Citation } from '@educlm/contracts';
 import { useMaterialPage } from '@/lib/hooks/use-study';
 import { usePreferences } from '@/components/providers/preferences-provider';
@@ -27,6 +27,16 @@ export function SourceProvider({
 }) {
   const [page, setPage] = useState<number | null>(null);
   const open = useCallback((next: number) => setPage(next), []);
+
+  // Switching material re-renders this provider rather than remounting it, so
+  // the open page number carried over and the sheet quietly refetched the same
+  // page of a different document under the old title.
+  const shownFor = useRef(materialId);
+  if (shownFor.current !== materialId) {
+    shownFor.current = materialId;
+    if (page !== null) setPage(null);
+  }
+
   const value = useMemo(() => ({ open }), [open]);
 
   return (
@@ -67,7 +77,7 @@ function SourcePageSheet({
       description="The text as it appears in your material."
       side="bottom"
     >
-      {query.isPending ? (
+      {query.isLoading ? (
         <div className="space-y-2">
           <Skeleton className="h-4 w-2/3" />
           <Skeleton className="h-4" />

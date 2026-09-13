@@ -50,9 +50,7 @@ export function StudyView({ materialId }: { materialId: string }) {
     <SourceProvider materialId={materialId}>
       <WorkspaceHeader
         title={material.data?.title ?? 'Study'}
-        subtitle={
-          topics.data ? `${topics.data.length} topics · ${material.data?.pageCount ?? 0} pages` : undefined
-        }
+        subtitle={subtitleFor(topics.data?.length, material.data?.pageCount)}
         backHref="/"
         backLabel="Agent"
         actions={
@@ -76,7 +74,7 @@ export function StudyView({ materialId }: { materialId: string }) {
         >
           <TopicList
             topics={topics.data ?? []}
-            isPending={topics.isPending}
+            isPending={topics.isLoading}
             isError={topics.isError}
             error={topics.error}
             onRetry={() => void topics.refetch()}
@@ -87,15 +85,20 @@ export function StudyView({ materialId }: { materialId: string }) {
 
         <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
           <div className="mx-auto w-full max-w-[70ch]">
-            {topics.data && topics.data.length === 0 ? (
+            {topics.isSuccess && topics.data.length === 0 ? (
               <EmptyState
                 title="No topics in this material yet"
                 description="EducLM finds topics while it reads a material. If this stays empty, the file may not have had readable text."
               />
+            ) : topics.isError ? (
+              // The lesson query is disabled without a topic, and a disabled
+              // query stays `pending` forever — so falling through to it turned a
+              // failed topic list into a lesson skeleton that never resolved.
+              <ErrorState error={topics.error} onRetry={() => void topics.refetch()} />
             ) : (
               <LessonView
                 lesson={lesson.data}
-                isPending={lesson.isPending}
+                isPending={lesson.isLoading || topics.isLoading}
                 isError={lesson.isError}
                 error={lesson.error}
                 onRetry={() => void lesson.refetch()}
@@ -120,7 +123,7 @@ export function StudyView({ materialId }: { materialId: string }) {
       >
         <TopicList
           topics={topics.data ?? []}
-          isPending={topics.isPending}
+          isPending={topics.isLoading}
           isError={topics.isError}
           error={topics.error}
           onRetry={() => void topics.refetch()}
@@ -144,6 +147,24 @@ export function StudyView({ materialId }: { materialId: string }) {
       </div>
     </SourceProvider>
   );
+}
+
+/**
+ * Two independent queries feed this line, so it waits for both. Reporting
+ * `pageCount ?? 0` meant a material whose topics arrived first was announced as
+ * "8 topics · 0 pages" — and `pageCount` is nullable in the contract, so the
+ * zero was standing in for "unknown" as well as for "not loaded".
+ */
+function subtitleFor(
+  topicCount: number | undefined,
+  pageCount: number | null | undefined,
+): string | undefined {
+  if (topicCount === undefined) return undefined;
+
+  const topics = `${topicCount} topic${topicCount === 1 ? '' : 's'}`;
+  if (pageCount === undefined || pageCount === null) return topics;
+
+  return `${topics} · ${pageCount} page${pageCount === 1 ? '' : 's'}`;
 }
 
 function TopicList({

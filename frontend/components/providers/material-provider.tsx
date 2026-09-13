@@ -21,6 +21,12 @@ interface MaterialContextValue {
   materialId: string | null;
   setMaterialId: (id: string) => void;
   isLoading: boolean;
+  /**
+   * The list actually came back. The only safe basis for telling a student
+   * their library is empty — `isLoading` reads false while an unreachable
+   * server is still being retried, so its absence proves nothing.
+   */
+  isSettled: boolean;
   error: unknown;
   refetch: () => void;
 }
@@ -33,7 +39,7 @@ const MaterialContext = createContext<MaterialContextValue | null>(null);
  * design, so this is a selection, not a collection.
  */
 export function MaterialProvider({ children }: { children: ReactNode }) {
-  const { data: materials, isLoading, error, refetch } = useMaterials();
+  const { data: materials, isLoading, isSuccess, error, refetch } = useMaterials();
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,6 +64,22 @@ export function MaterialProvider({ children }: { children: ReactNode }) {
     );
   }, [list, selected]);
 
+  /**
+   * Forget a selection that no longer exists.
+   *
+   * The fallback chain above quietly opens a different material, so a deleted id
+   * kept in storage meant every session started on someone else's choice — and
+   * kept doing so, because nothing ever cleared it. Only run once the list has
+   * actually loaded: an empty list mid-fetch is not evidence the id is dead.
+   */
+  useEffect(() => {
+    if (!selected || isLoading || list.length === 0) return;
+    if (list.some((entry) => entry.id === selected)) return;
+
+    window.localStorage.removeItem(STORAGE_KEY);
+    setSelected(null);
+  }, [selected, list, isLoading]);
+
   const value = useMemo<MaterialContextValue>(
     () => ({
       materials: list,
@@ -65,10 +87,11 @@ export function MaterialProvider({ children }: { children: ReactNode }) {
       materialId: material?.id ?? null,
       setMaterialId,
       isLoading,
+      isSettled: isSuccess,
       error,
       refetch: () => void refetch(),
     }),
-    [list, material, setMaterialId, isLoading, error, refetch],
+    [list, material, setMaterialId, isLoading, isSuccess, error, refetch],
   );
 
   return <MaterialContext.Provider value={value}>{children}</MaterialContext.Provider>;

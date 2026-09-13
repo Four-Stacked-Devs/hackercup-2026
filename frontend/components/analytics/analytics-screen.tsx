@@ -1,6 +1,7 @@
 'use client';
 
 import { WorkspaceHeader } from '@/components/shell/workspace-header';
+import { MaterialGate } from '@/components/shell/material-gate';
 import { useMaterial } from '@/lib/hooks/use-materials';
 import { AnalyticsView } from './analytics-view';
 
@@ -16,7 +17,9 @@ export function AnalyticsScreen({ materialId }: { materialId: string }) {
         backLabel="Agent"
       />
       <div className="mx-auto w-full max-w-5xl flex-1 px-3 py-5 sm:px-5">
-        <AnalyticsView materialId={materialId} />
+        <MaterialGate materialId={materialId}>
+          <AnalyticsView materialId={materialId} />
+        </MaterialGate>
       </div>
     </>
   );

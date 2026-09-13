@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MATERIAL_STATUS_POLL_MS, type Material } from '@educlm/contracts';
 import {
@@ -10,6 +11,7 @@ import {
   listMaterials,
 } from '../api/endpoints';
 import { queryKeys } from '../query-keys';
+import { forgetMaterial } from '../thread-index';
 
 /**
  * The list polls at half the rate of the single-material status endpoint.
@@ -34,12 +36,20 @@ export function useMaterials() {
      * notices that it may start answering. Settles to no polling once every
      * material is ready or failed.
      */
-    refetchInterval: (query) =>
-      (query.state.data ?? []).some(
+    refetchInterval: (query) => {
+      // Nothing has loaded and the last attempt failed. Stopping here left the
+      // list dead for the session: a material that finished ingesting during the
+      // outage would never appear, because only a remount could revive the poll.
+      if (query.state.data === undefined) {
+        return query.state.status === 'error' ? MATERIAL_LIST_POLL_MS : false;
+      }
+
+      return query.state.data.some(
         (material) => material.status !== 'ready' && material.status !== 'failed',
       )
         ? MATERIAL_LIST_POLL_MS
-        : false,
+        : false;
+    },
     refetchIntervalInBackground: true,
   });
 }
@@ -57,7 +67,10 @@ export function useMaterial(id: string | null) {
  * still running — a ready material stops making requests.
  */
 export function useMaterialStatus(id: string | null, enabled = true) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const settled = useRef(false);
+
+  const query = useQuery({
     queryKey: queryKeys.materialStatus(id ?? 'none'),
     queryFn: ({ signal }) => getMaterialStatus(id as string, signal),
     enabled: Boolean(id) && enabled,
@@ -69,6 +82,34 @@ export function useMaterialStatus(id: string | null, enabled = true) {
     // does too — coming back to the tab shows the truth, not a frozen bar.
     refetchIntervalInBackground: true,
   });
+
+  /**
+   * Reaching `ready` changes the material itself — page count, topic count,
+   * status — and nothing else was telling the cache.
+   *
+   * The upload response seeds `['material', id]` with the 202 body, where
+   * `pageCount` is still null and `topicCount` is 0. With a 30s staleTime, opening
+   * the lesson straight after ingestion read that row and rendered "0 pages" as a
+   * fact about a finished material.
+   */
+  const status = query.data?.status;
+  useEffect(() => {
+    if (!id) return;
+
+    if (status !== 'ready' && status !== 'failed') {
+      settled.current = false;
+      return;
+    }
+
+    if (settled.current) return;
+    settled.current = true;
+
+    void queryClient.invalidateQueries({ queryKey: queryKeys.material(id) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.materials() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.topics(id) });
+  }, [id, status, queryClient]);
+
+  return query;
 }
 
 export function useUploadMaterial() {
@@ -94,6 +135,11 @@ export function useDeleteMaterial() {
       queryClient.removeQueries({ queryKey: queryKeys.progress(id) });
       queryClient.removeQueries({ queryKey: queryKeys.plan(id) });
       queryClient.removeQueries({ queryKey: queryKeys.topics(id) });
+      queryClient.removeQueries({ queryKey: queryKeys.chat(id) });
+      queryClient.removeQueries({ queryKey: queryKeys.materialStatus(id) });
+      // The thread index is keyed by material, so without this it outlives the
+      // material it described and grows for the life of the browser.
+      forgetMaterial(id);
       void queryClient.invalidateQueries({ queryKey: queryKeys.materials() });
     },
   });

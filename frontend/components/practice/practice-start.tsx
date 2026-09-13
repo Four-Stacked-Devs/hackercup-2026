@@ -63,7 +63,7 @@ export function PracticeStart() {
             <Card>
               <CardHeader title="One topic" description="Focused practice on what you choose." />
 
-              {topics.isPending ? (
+              {topics.isLoading ? (
                 <SkeletonCard lines={4} />
               ) : topics.isError ? (
                 <ErrorState error={topics.error} onRetry={() => void topics.refetch()} />

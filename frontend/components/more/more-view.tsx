@@ -31,21 +31,31 @@ interface Row {
  * four thumbs, in one scannable list.
  */
 export function MoreView() {
-  const { material, materials } = useCurrentMaterial();
+  const { material, materials, isSettled } = useCurrentMaterial();
+
+  // Every detail line below is a statement about this device's library. Until it
+  // has loaded there is nothing true to say, so these say nothing rather than
+  // "0 materials" and "Add a material first" to someone who has several.
+  const librarySize = !isSettled
+    ? 'Checking this device…'
+    : `${materials.length} material${materials.length === 1 ? '' : 's'} on this device`;
+  const noMaterialYet = !isSettled ? 'Loading…' : 'Add a material first';
 
   const workspace: Row[] = [
     {
       key: 'plan',
       label: 'Learning plan',
-      detail: material ? material.title : 'Add a material first',
+      detail: material ? material.title : noMaterialYet,
       icon: PlanIcon,
       href: material ? `/plan/${material.id}` : null,
-      ...(material ? {} : { unavailableReason: 'Add a material to build a plan.' }),
+      ...(material || !isSettled
+        ? {}
+        : { unavailableReason: 'Add a material to build a plan.' }),
     },
     {
       key: 'library',
       label: 'Library',
-      detail: `${materials.length} material${materials.length === 1 ? '' : 's'} on this device`,
+      detail: librarySize,
       icon: LibraryIcon,
       href: '/materials',
     },
@@ -59,10 +69,16 @@ export function MoreView() {
     {
       key: 'source',
       label: 'Read the material',
-      detail: material ? `${material.pageCount ?? 0} pages` : 'Add a material first',
+      // `pageCount` is nullable in the contract, so `?? 0` reported "0 pages" for
+      // a material whose count is simply not known.
+      detail: material
+        ? material.pageCount === null
+          ? material.title
+          : `${material.pageCount} pages`
+        : noMaterialYet,
       icon: DocIcon,
       href: material ? `/study/${material.id}` : null,
-      ...(material ? {} : { unavailableReason: 'Add a material to read it.' }),
+      ...(material || !isSettled ? {} : { unavailableReason: 'Add a material to read it.' }),
     },
   ];
 

@@ -34,8 +34,14 @@ export function SkeletonCard({ lines = 3, className }: { lines?: number; classNa
  * not a call to action. Renders nothing while the server is fine.
  */
 export function ReconnectNote() {
-  const { isError } = useHealth();
-  if (!isError) return null;
+  const health = useHealth();
+
+  // Not `isError` alone. While the server is unreachable the health query sits
+  // at pending/paused and never reaches an error state, which is exactly when
+  // this note is worth showing — so a pending query that has already failed at
+  // least once counts too.
+  const unreachable = health.isError || (health.isPending && health.failureCount > 0);
+  if (!unreachable) return null;
 
   return (
     <p

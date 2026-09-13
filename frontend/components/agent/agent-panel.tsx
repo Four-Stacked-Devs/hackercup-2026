@@ -33,7 +33,7 @@ export function AgentPanel({
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4">
         <Conversation
           messages={history.data ?? []}
-          isPending={history.isPending}
+          isPending={history.isLoading}
           isError={history.isError}
           error={history.error}
           onRetry={() => void history.refetch()}
