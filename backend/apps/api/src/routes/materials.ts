@@ -169,6 +169,11 @@ export function materialRoutes(queue: JobQueue): FastifyPluginAsyncZod {
           where: { id: request.params.id, userId: request.user.id },
         });
         if (!material) throw errors.notFound('That material');
+        // Without this, a material still being read returns `200 []` — which the
+        // UI cannot tell apart from a material that genuinely has no topics, and
+        // so renders as "no topics in this material yet".
+        if (material.status === 'PROCESSING') throw errors.materialNotReady();
+        if (material.status === 'FAILED') throw errors.materialFailed(material.failureMessage);
 
         const topics = await db().topic.findMany({
           where: { materialId: material.id },
@@ -217,6 +222,7 @@ export function materialRoutes(queue: JobQueue): FastifyPluginAsyncZod {
         });
         if (!material) throw errors.notFound('That material');
         if (material.status === 'PROCESSING') throw errors.materialNotReady();
+        if (material.status === 'FAILED') throw errors.materialFailed(material.failureMessage);
 
         const topic = await db().topic.findFirst({
           where: { id: request.query.topicId, materialId: material.id },
@@ -228,8 +234,17 @@ export function materialRoutes(queue: JobQueue): FastifyPluginAsyncZod {
           orderBy: { orderIndex: 'asc' },
         });
 
-        const generatedBy = sections[0]?.generatedBy ?? 'unknown';
-        const generatedAt = sections[0]?.generatedAt ?? topic.createdAt;
+        // Lesson building skips a topic whose chunks never resolved, so a ready
+        // material can still have a topic with nothing written for it. Saying so
+        // beats a 200 carrying an empty lesson attributed to "unknown".
+        if (sections.length === 0) {
+          throw errors.materialFailed(
+            'This topic has no lesson yet — EducLM could not turn that part of the material into one.',
+          );
+        }
+
+        const generatedBy = sections[0]!.generatedBy;
+        const generatedAt = sections[0]!.generatedAt;
 
         return ok(request, toLesson(topic, sections, generatedBy, generatedAt));
       },

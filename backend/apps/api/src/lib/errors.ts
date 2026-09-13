@@ -58,6 +58,17 @@ export const errors = {
       'This material is still being prepared. Give it a few more seconds.',
     ),
 
+  /**
+   * Preparation finished and failed. Shares MATERIAL_NOT_READY's code — the enum
+   * is published and both mean "there is nothing to read here yet" — but carries
+   * the real reason, which is the sentence the student actually sees.
+   */
+  materialFailed: (reason?: string | null) =>
+    new ApiException(
+      'MATERIAL_NOT_READY',
+      reason ?? 'This material could not be prepared, so there is nothing to show yet.',
+    ),
+
   insufficientEvidence: (message?: string) =>
     new ApiException(
       'INSUFFICIENT_EVIDENCE',

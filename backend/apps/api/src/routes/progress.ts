@@ -36,6 +36,10 @@ export const progressRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const material = await db().material.findFirst({ where: { id: materialId, userId } });
       if (!material) throw errors.notFound('That material');
+      // This route builds the learning plan on first read. Reaching it while the
+      // material has no topics yet used to persist an empty plan that ingestion
+      // never refilled.
+      if (material.status === 'PROCESSING') throw errors.materialNotReady();
 
       const topics = await db().topic.findMany({
         where: { materialId },

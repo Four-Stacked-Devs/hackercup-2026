@@ -25,6 +25,10 @@ export const planRoutes: FastifyPluginAsyncZod = async (app) => {
         where: { id: request.query.materialId, userId: request.user.id },
       });
       if (!material) throw errors.notFound('That material');
+      // `getPlan` builds the plan on first read. Before the material has topics
+      // there is nothing to build it from, and persisting the empty result left
+      // the student with a plan ingestion could never fill.
+      if (material.status === 'PROCESSING') throw errors.materialNotReady();
 
       return ok(request, await getPlan(request.user.id, material.id));
     },
