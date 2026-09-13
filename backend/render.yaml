@@ -28,8 +28,8 @@ services:
     #   db:generate   apps/api/src/generated/ is gitignored, so the Prisma
     #                 client does not exist until it is generated here.
     #   build         turbo: contracts, then the API.
-    #   prewarm       downloads the ONNX weights into the image so the first
-    #                 request after a cold start does not pay for it.
+    #   prewarm       downloads the ONNX weights into the image when
+    #                 EMBEDDING_PROVIDER=local; a no-op with google.
     buildCommand: >-
       npm install -g pnpm@11.17.0 &&
       pnpm install --frozen-lockfile --prod=false &&
@@ -41,8 +41,8 @@ services:
     # EMBEDDING_CACHE_DIR is the relative './.models', so a different cwd here
     # would silently miss the cache and re-download on every boot.
     # The API's `start` script caps V8's heap at 320MB so it collects garbage
-    # before Render's OOM killer does, leaving room for onnxruntime's native
-    # memory. It is not NODE_OPTIONS: env vars apply to the build too, and
+    # before Render's OOM killer does, leaving room for pdf.js's native page
+    # buffers. It is not NODE_OPTIONS: env vars apply to the build too, and
     # `tsc` over the generated Prisma client needs more than that.
     startCommand: pnpm --filter @educlm/api start
 
@@ -55,21 +55,12 @@ services:
       - key: NODE_VERSION
         value: 22.18.0
 
-      # The free instance is 512MB. fp32 weights (~130MB resident) alongside
-      # Node, Fastify, Prisma and unpdf page buffers do not fit with headroom.
-      # q8 is ~33MB. See EMBEDDING_DTYPE in apps/api/src/env.ts.
-      - key: EMBEDDING_DTYPE
-        value: q8
-
-      # One passage per embedding call, on one onnxruntime thread with no
-      # retained arena (see lib/embeddings.ts). The previous batch of 16 on the
-      # default runtime added ~720MB for one 61-page PDF and killed the 512MB
-      # instance mid-upload; this adds ~170MB, and is faster on 0.1 CPU.
-      - key: EMBEDDING_BATCH_SIZE
-        value: "1"
-
+      # Gemini embeddings, on the same free key as the LLM. The local model
+      # cannot fit: with onnxruntime loaded, preparing a 61-page PDF peaked at
+      # ~450MB of the free instance's 512MB, and Render killed it mid-upload.
+      # Hosted, the same upload peaks at ~225MB. Leave EMBEDDING_MODEL unset.
       - key: EMBEDDING_PROVIDER
-        value: local
+        value: google
       # Gemini's free tier, no card. Each free model has its own daily quota;
       # flash-lite has the most headroom for a demo. See README "Going live".
       - key: LLM_PROVIDER
