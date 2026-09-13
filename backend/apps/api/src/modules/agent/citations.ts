@@ -26,9 +26,13 @@ export function buildSnippet(content: string, max = MAX_SNIPPET): string {
   const normalized = content.replace(/\s+/g, ' ').trim();
   if (normalized.length <= max) return normalized;
 
-  const cut = normalized.slice(0, max);
+  // The ellipsis counts against `max`: the contract caps `snippet` at 240 chars
+  // and the response serializer enforces it, so spending the whole budget on
+  // text and then appending a character produced a 241-char snippet and a 500.
+  const budget = max - 1;
+  const cut = normalized.slice(0, budget);
   const lastSpace = cut.lastIndexOf(' ');
-  return `${cut.slice(0, lastSpace > max * 0.6 ? lastSpace : max).trimEnd()}…`;
+  return `${cut.slice(0, lastSpace > budget * 0.6 ? lastSpace : budget).trimEnd()}…`;
 }
 
 /**
