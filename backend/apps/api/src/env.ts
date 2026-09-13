@@ -131,7 +131,18 @@ const DEFAULT_LLM_CONCURRENCY: Record<LlmProvider, number> = {
   stub: 4,
 };
 
-const llmModel = raw.LLM_MODEL ?? DEFAULT_LLM_MODEL[llmProvider];
+/**
+ * `provider/model` is how many gateways and docs write model ids, and Google's
+ * API answers `google/gemini-3.8-flash` with a 404 and no message — so every
+ * call quietly fell back. The provider is already chosen by LLM_PROVIDER; a
+ * leading `google/` or `models/` on its own model id is dropped.
+ */
+function normaliseModelId(provider: LlmProvider, model: string): string {
+  if (provider === 'google') return model.replace(/^(?:google\/|models\/)+/, '');
+  return model;
+}
+
+const llmModel = normaliseModelId(llmProvider, raw.LLM_MODEL ?? DEFAULT_LLM_MODEL[llmProvider]);
 
 const llmLimits = {
   rpm: raw.LLM_MAX_RPM ?? DEFAULT_LLM_LIMITS[llmProvider].rpm,

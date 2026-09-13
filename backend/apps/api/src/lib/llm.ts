@@ -239,6 +239,22 @@ export function parseRetryDelay(text: string): number | null {
   return total > 0 ? Math.round(total) : null;
 }
 
+/**
+ * A readable reason for a failed call. Some providers answer an error with a
+ * status and an empty body — Google's 404 for an unknown model does — which
+ * logged as "failed: " and nothing else.
+ */
+function describeError(error: unknown): string {
+  const e = error as { message?: string; statusCode?: number; lastError?: unknown };
+  const inner = (e.lastError ?? error) as { message?: string; statusCode?: number };
+  const message = (inner.message || e.message || '').trim();
+  const status = inner.statusCode ?? e.statusCode;
+  if (message) return status ? `${message} (HTTP ${status})` : message;
+  return status
+    ? `HTTP ${status} with no message — check LLM_MODEL (${env.LLM_MODEL}) and LLM_API_KEY`
+    : 'unknown error';
+}
+
 function errorText(error: unknown): string {
   const parts: string[] = [];
   let current: unknown = error;
@@ -382,7 +398,7 @@ export function createLlmClient(
           logger.warn(`[llm] schema validation failed on attempt ${attempt + 1}`);
         } catch (error) {
           logger.warn(
-            `[llm] generateJson attempt ${attempt + 1} failed: ${(error as Error).message}`,
+            `[llm] generateJson attempt ${attempt + 1} failed: ${describeError(error)}`,
           );
           // Another attempt would fail the same way until the quota resets.
           if (noteQuotaError(error, logger)) break;
@@ -420,7 +436,7 @@ export function createLlmClient(
         );
         return { text: result.text, usedFallback: false };
       } catch (error) {
-        logger.warn(`[llm] generateText failed: ${(error as Error).message}`);
+        logger.warn(`[llm] generateText failed: ${describeError(error)}`);
         noteQuotaError(error, logger);
         return { text: request.fallback(), usedFallback: true };
       }
@@ -469,7 +485,7 @@ export function createLlmClient(
       }
 
       if (streamError !== undefined) {
-        logger.warn(`[llm] streamText failed: ${(streamError as Error).message}`);
+        logger.warn(`[llm] streamText failed: ${describeError(streamError)}`);
         noteQuotaError(streamError, logger);
         // A half-streamed answer is already on screen; appending the fallback would garble it.
         if (!yielded) for (const piece of chunkForStreaming(request.fallback())) yield piece;
