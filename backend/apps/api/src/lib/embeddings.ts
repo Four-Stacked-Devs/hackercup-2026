@@ -40,6 +40,19 @@ async function getExtractor(): Promise<FeatureExtractor> {
       // q8 on a 512MB container. See EMBEDDING_DTYPE in env.ts.
       const pipe = await transformers.pipeline('feature-extraction', env.EMBEDDING_MODEL, {
         dtype: env.EMBEDDING_DTYPE,
+        // Memory, not speed, is the constraint that matters: the free instance
+        // is 512MB and 0.1 CPU. By default onnxruntime starts a thread per core,
+        // each with its own memory arena, and keeps every arena at its peak for
+        // the life of the process — measured at ~720MB for one 58-passage
+        // material, which killed the instance mid-upload. One thread and no
+        // arena give memory back after each batch; on 0.1 CPU the extra threads
+        // were not making it faster anyway.
+        session_options: {
+          intraOpNumThreads: 1,
+          interOpNumThreads: 1,
+          enableCpuMemArena: false,
+          enableMemPattern: false,
+        },
       });
 
       return pipe as unknown as FeatureExtractor;
@@ -71,7 +84,12 @@ export function hashEmbed(text: string, dims = VECTOR_DIMS): number[] {
   return vector.map((v) => v / magnitude);
 }
 
-const BATCH_SIZE = 16;
+/**
+ * Passages embedded per model call. Attention memory grows with batch size ×
+ * sequence length², and passages here run to the model's 512-token limit, so a
+ * batch of 16 held hundreds of MB at once. See EMBEDDING_BATCH_SIZE in env.ts.
+ */
+const BATCH_SIZE = env.EMBEDDING_BATCH_SIZE;
 
 function createLocalEmbedder(): Embedder {
   return {

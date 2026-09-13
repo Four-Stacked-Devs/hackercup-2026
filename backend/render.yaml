@@ -57,6 +57,19 @@ services:
       - key: EMBEDDING_DTYPE
         value: q8
 
+      # One passage per embedding call, on one onnxruntime thread with no
+      # retained arena (see lib/embeddings.ts). The previous batch of 16 on the
+      # default runtime added ~720MB for one 61-page PDF and killed the 512MB
+      # instance mid-upload; this adds ~170MB, and is faster on 0.1 CPU.
+      - key: EMBEDDING_BATCH_SIZE
+        value: "1"
+
+      # Caps V8's heap well under the container limit so it collects garbage
+      # before Render's OOM killer does, leaving room for onnxruntime's native
+      # memory and pdf.js page buffers alongside it.
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=320
+
       - key: EMBEDDING_PROVIDER
         value: local
       - key: LLM_PROVIDER

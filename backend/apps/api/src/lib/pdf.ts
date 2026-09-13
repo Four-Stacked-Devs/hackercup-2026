@@ -25,10 +25,17 @@ export async function extractPdf(bytes: Uint8Array): Promise<ExtractedPdf> {
 
   try {
     const pdf = await getDocumentProxy(bytes);
-    const result = await extractText(pdf, { mergePages: false });
+    try {
+      const result = await extractText(pdf, { mergePages: false });
 
-    pageCount = pdf.numPages;
-    pages = (Array.isArray(result.text) ? result.text : [result.text]).map(normalizeText);
+      pageCount = pdf.numPages;
+      pages = (Array.isArray(result.text) ? result.text : [result.text]).map(normalizeText);
+    } finally {
+      // The parsed document holds every page's objects; only the text is kept,
+      // and on a 512MB instance the rest is memory the embedder needs next.
+      // Best effort: releasing it must never fail an extraction that worked.
+      await (pdf as { cleanup?: () => Promise<unknown> }).cleanup?.().catch(() => {});
+    }
   } catch {
     // A parse failure is not a text-layer problem — say so honestly.
     throw errors.validation(

@@ -63,6 +63,12 @@ const rawEnvSchema = z.object({
    * slightly; it is a deploy-time trade, not the local default.
    */
   EMBEDDING_DTYPE: z.enum(['fp32', 'fp16', 'q8', 'int8', 'uint8', 'q4']).default('fp32'),
+  /**
+   * Passages per embedding call. Peak memory scales with it (attention is
+   * batch × tokens²), so the default is small enough for a 512MB container;
+   * a machine with memory to spare can raise it for faster ingestion.
+   */
+  EMBEDDING_BATCH_SIZE: z.coerce.number().int().min(1).max(64).default(1),
   OPENAI_API_KEY: optionalSetting,
 
   // Uploads
