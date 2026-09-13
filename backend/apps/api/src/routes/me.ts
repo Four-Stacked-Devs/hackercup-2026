@@ -4,17 +4,11 @@ import {
   apiSuccess,
   meSchema,
   updatePreferencesSchema,
-  DEFAULT_PREFERENCES,
   type AccessibilityPreferences,
 } from '@educlm/contracts';
 import { db } from '../db/client.js';
 import { ok } from '../lib/envelope.js';
-
-/** Unknown/legacy stored preferences fall back to the defaults, never to a crash. */
-function readPreferences(value: unknown): AccessibilityPreferences {
-  const parsed = accessibilityPreferencesSchema.safeParse(value);
-  return parsed.success ? parsed.data : DEFAULT_PREFERENCES;
-}
+import { readPreferences } from '../lib/preferences.js';
 
 export const meRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(

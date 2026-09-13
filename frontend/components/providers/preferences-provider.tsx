@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -63,13 +64,25 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000,
   });
 
+  /**
+   * The server's copy is authoritative only until the student changes something.
+   *
+   * A failed save tells them "It still applies here" — and then the next
+   * resolution of this query overwrote the setting with the server's older
+   * value, silently breaking that promise. `refetchOnReconnect` fires at exactly
+   * the moment a save is most likely to have failed, so this was reachable.
+   */
+  const hasLocalEdit = useRef(false);
+
   useEffect(() => {
-    if (me.data) setLocal(me.data.preferences);
+    if (me.data && !hasLocalEdit.current) setLocal(me.data.preferences);
   }, [me.data]);
 
   const mutation = useMutation({
     mutationFn: (patch: UpdatePreferencesRequest) => updatePreferences(patch),
     onSuccess: (saved) => {
+      // The server has the edit now, so its copy is safe to follow again.
+      hasLocalEdit.current = false;
       setLocal(saved);
       window.localStorage.setItem(LOCAL_KEY, JSON.stringify(saved));
       queryClient.setQueryData<Me>(queryKeys.me(), (current) =>
@@ -84,6 +97,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     (patch: UpdatePreferencesRequest) => {
       // Applied instantly; the request only confirms it. A failed save leaves
       // the setting working for this session and says so.
+      hasLocalEdit.current = true;
       setLocal((current) => {
         const next: AccessibilityPreferences = {
           ...current,
