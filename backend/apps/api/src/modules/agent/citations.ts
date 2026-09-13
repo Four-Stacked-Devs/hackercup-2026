@@ -10,14 +10,46 @@ import type { RetrievedChunk } from './retrieval.js';
  */
 
 export const MAX_SNIPPET = 240;
-const CITATION_PATTERN = /\[p\.\s*(\d+)\]/gi;
+
+/**
+ * `[p.12]`, and the variants models write despite being asked for one page per
+ * marker: `[pp.7-9]`, `[p.26‑33]` (a non-breaking hyphen), `[p.7, 9]`,
+ * `[p.3, p.5]`. Only matching the single-page form silently dropped every
+ * source chip from answers that cited ranges — which overviews nearly always do.
+ */
+const CITATION_PATTERN = /\[\s*pp?\.\s*([\dp.\s,;–—‑‐-]{1,40}?)\s*\]/gi;
+const PAGE_OR_RANGE = /(\d+)(?:\s*[-–—‑‐]\s*(?:pp?\.\s*)?(\d+))?/g;
+/** A wider "range" is a typo or a year, not a citation. */
+const MAX_RANGE = 20;
+
+/**
+ * gpt-oss falls back on its training's citation style — `【1†p.35】` — however
+ * the prompt asks. Left alone it renders as noise and resolves to no chip.
+ */
+const FOREIGN_MARKER = /【[^】]{0,12}?\bp{1,2}(?:age)?\.?\s*([\d\s,;–—‑‐-]{1,40}?)\s*】/gi;
+
+/** Rewrite foreign citation markers into the `[p.N]` form everything else reads. */
+export function normalizeCitationMarkers(text: string): string {
+  return text.replace(FOREIGN_MARKER, (_, pages: string) => `[p.${pages.trim()}]`);
+}
 
 export function extractCitedPages(text: string): number[] {
   const pages = new Set<number>();
-  for (const match of text.matchAll(CITATION_PATTERN)) {
-    const page = Number.parseInt(match[1]!, 10);
-    if (Number.isFinite(page)) pages.add(page);
+
+  for (const match of normalizeCitationMarkers(text).matchAll(CITATION_PATTERN)) {
+    for (const part of match[1]!.matchAll(PAGE_OR_RANGE)) {
+      const start = Number.parseInt(part[1]!, 10);
+      const end = part[2] ? Number.parseInt(part[2], 10) : start;
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+
+      if (end >= start && end - start <= MAX_RANGE) {
+        for (let page = start; page <= end; page += 1) pages.add(page);
+      } else {
+        pages.add(start);
+      }
+    }
   }
+
   return [...pages].sort((a, b) => a - b);
 }
 

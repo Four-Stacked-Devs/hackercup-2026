@@ -15,8 +15,59 @@ import { errors } from '../lib/errors.js';
 import { ok } from '../lib/envelope.js';
 import { createLlmClient } from '../lib/llm.js';
 import { toChatMessage } from '../lib/serializers.js';
-import { answerQuestion, classifyIntent, streamAnswer } from '../modules/agent/chat.js';
-import { retrieveChunks } from '../modules/agent/retrieval.js';
+import type { ChatTurn, LlmClient } from '../lib/llm.js';
+import {
+  answerQuestion,
+  classifyIntent,
+  retrievalQuery,
+  streamAnswer,
+  type MaterialContext,
+} from '../modules/agent/chat.js';
+import { overviewChunks, retrieveChunks } from '../modules/agent/retrieval.js';
+
+/** Turns of earlier conversation sent with each message. */
+const HISTORY_TURNS = 8;
+
+/**
+ * The earlier turns of this thread, oldest first.
+ *
+ * Without them every message was answered cold: the "Explain more simply" chip
+ * sends "Explain that again more simply", and "that" pointed at nothing. Scoped
+ * to the thread, not the material, so a new chat really starts fresh. Threads
+ * follow the client's rules: a minted conversation id when there is one,
+ * otherwise the topic's own thread, otherwise the untopiced log. Long answers
+ * are clipped — the model needs the gist of what it said, not every word, and
+ * the budget is shared with the source passages.
+ */
+async function loadHistory(
+  userId: string,
+  materialId: string,
+  thread: { conversationId: string | undefined; topicId: string | undefined },
+  llm: LlmClient,
+): Promise<ChatTurn[]> {
+  const rows = await db().chatMessage.findMany({
+    where: {
+      userId,
+      materialId,
+      ...(thread.conversationId
+        ? { conversationId: thread.conversationId }
+        : { conversationId: null, topicId: thread.topicId ?? null }),
+    },
+    orderBy: { createdAt: 'desc' },
+    take: HISTORY_TURNS,
+    select: { role: true, content: true },
+  });
+
+  const perTurn = Math.max(400, Math.floor(llm.budget.inputChars / 4 / HISTORY_TURNS));
+
+  return rows
+    .reverse()
+    .filter((row) => row.role === 'user' || row.role === 'assistant')
+    .map((row) => ({
+      role: row.role as ChatTurn['role'],
+      content: row.content.length > perTurn ? `${row.content.slice(0, perTurn)}…` : row.content,
+    }));
+}
 
 export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
@@ -38,18 +89,44 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
       const { message, topicId, conversationId, stream } = request.body;
       const llm = createLlmClient(request.log);
 
+      // Read before this turn is saved, so the history is only what came before it.
+      const history = await loadHistory(
+        request.user.id,
+        material.id,
+        { conversationId, topicId },
+        llm,
+      );
+
       // Classified before retrieval: a greeting has nothing to retrieve, and
       // embedding it would cost a model call to match passages against "hi".
       const intent = classifyIntent(message);
 
       const chunks =
-        intent === 'material'
-          ? await retrieveChunks({
+        intent === 'overview'
+          ? await overviewChunks({
               materialId: material.id,
-              query: message,
               topicId,
+              budgetChars: llm.budget.inputChars,
             })
-          : [];
+          : intent === 'material'
+            ? await retrieveChunks({
+                materialId: material.id,
+                query: retrievalQuery(message, history),
+                topicId,
+              })
+            : [];
+
+      const topics = await db().topic.findMany({
+        where: { materialId: material.id },
+        orderBy: { orderIndex: 'asc' },
+        select: { id: true, name: true, summary: true, sourcePages: true },
+      });
+
+      const context: MaterialContext = {
+        title: material.title,
+        topics,
+        topicName: topicId ? (topics.find((t) => t.id === topicId)?.name ?? null) : null,
+      };
 
       await db().chatMessage.create({
         data: {
@@ -83,7 +160,8 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
           chunks,
           llm,
           intent,
-          materialTitle: material.title,
+          history,
+          context,
         });
 
         if (result.refusedHomework) {
@@ -122,7 +200,8 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
           chunks,
           llm,
           intent,
-          materialTitle: material.title,
+          history,
+          context,
         });
 
         let next = await generator.next();

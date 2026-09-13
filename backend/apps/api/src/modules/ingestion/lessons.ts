@@ -6,8 +6,9 @@ import type { ChunkDraft } from './chunk.js';
 /**
  * Accessible lesson building.
  *
- * The transformation is a REFORMAT, not a rewrite: clean headings, short
- * paragraphs, plain sentences, preserved lists. Do not invent content.
+ * The model writes study notes that explain the source — short paragraphs,
+ * plain sentences, defined terms, key takeaways — without adding facts the
+ * source does not contain.
  *
  * Tables and equations are marked `needsReview` and keep their source page, so
  * the student is told to check the original rather than being handed a
@@ -29,7 +30,10 @@ const llmLessonSchema = z.object({
     .array(
       z.object({
         heading: z.string().min(1).max(160),
-        level: z.union([z.literal(2), z.literal(3)]).default(2),
+        // A plain required integer: Gemini's schema subset only allows string
+        // enums, Groq's strict mode rejects defaulted (optional) properties,
+        // and the mapping below clamps it to 2 or 3 anyway.
+        level: z.number().int(),
         bodyMarkdown: z.string().min(1),
         sourcePages: z.array(z.number().int().positive()).min(1),
       }),
@@ -126,24 +130,51 @@ export function tidyMarkdown(text: string): string {
 
 // ─── LLM path ────────────────────────────────────────────────────────────────
 
-const SYSTEM = `You reformat textbook passages into accessible lesson sections for a
-high-school student who may have a reading difficulty.
+/**
+ * Explain, don't embellish. A pure reformat of a slide deck hands the student
+ * the same terse bullets they already could not learn from, so the model may
+ * unpack what the source says — but every fact still has to come from it.
+ */
+const SYSTEM = `You turn one topic from a student's own course material into clear study
+notes they can learn from. The source is often terse — lecture slides, bullet
+points, code snippets — and your job is to make it understandable.
 
-Absolute rules:
-- REFORMAT ONLY. Never add facts, examples, or explanations that are not in the
-  source text. This is not a rewrite and not a summary of your own knowledge.
-- Keep every technical term the source uses.
-- Short paragraphs (2-4 sentences). Plain sentences. Active voice.
-- Preserve lists as markdown lists. Preserve code as fenced code blocks.
-- If a passage is a table or an equation, reproduce it as faithfully as you can
-  and do not attempt to explain it away.
-- sourcePages must come from the page numbers given to you.
-- Headings should be the material's own headings where they exist.`;
+GROUNDING
+- Every fact, definition, rule, and example must come from the source passages.
+- You MAY explain and connect what the source says: spell out what a bullet
+  point means, why a step matters, how two ideas relate, what a code snippet
+  does line by line.
+- You may NOT introduce facts, features, APIs, or topics the source does not
+  contain. If the source is thin on something, keep that part short.
+- Keep every technical term the source uses and define it in plain words the
+  first time it appears.
+- Reproduce code exactly, in fenced code blocks with a language tag, then
+  explain it. Reproduce tables and equations faithfully, then say what they show.
+
+STRUCTURE — sections in this order
+1. "What this topic is about": 2-3 sentences on what it covers and why it
+   matters in this material.
+2. One section per key idea, using the material's own headings where they
+   exist. Explain in short paragraphs and bullet lists. Bold each key term on
+   first use.
+3. If the source has examples or code, a section that walks through them.
+4. "Key takeaways": 3-6 bullets a student could revise from the night before a
+   test.
+
+STYLE
+- Plain sentences, active voice, one idea per sentence, paragraphs of 2-4
+  sentences. Write for a student who may find reading hard.
+- Markdown in bodyMarkdown (bold, lists, code fences). Never put a heading
+  inside bodyMarkdown; the heading field carries it.
+- level is 2 for a main section, 3 for a sub-section of the one before it.
+- sourcePages: the page numbers each section draws on, only from those given.
+  The opening and takeaways list every page they summarise.`;
 
 export async function buildLessonSections(
   topicName: string,
   chunks: ChunkDraft[],
   llm: LlmClient,
+  topicSummary?: string,
 ): Promise<{ sections: SectionDraft[]; usedFallback: boolean }> {
   if (chunks.length === 0) return { sections: [], usedFallback: true };
 
@@ -152,14 +183,14 @@ export async function buildLessonSections(
   const source = chunks
     .map((c) => `[p.${c.page}]${c.sectionTitle ? ` (${c.sectionTitle})` : ''}\n${c.content}`)
     .join('\n\n---\n\n')
-    .slice(0, 16_000);
+    .slice(0, llm.budget.inputChars);
 
   const { value, usedFallback } = await llm.generateJson({
     schema: llmLessonSchema,
     system: SYSTEM,
-    prompt: `Topic: ${topicName}\n\nSource passages:\n\n${source}`,
+    prompt: `Topic: ${topicName}${topicSummary ? `\nWhat it covers: ${topicSummary}` : ''}\n\nSource passages:\n\n${source}`,
     retries: 1,
-    maxOutputTokens: 4000,
+    maxOutputTokens: llm.budget.outputTokens,
     fallback: () => ({
       sections: buildSectionsStructurally(chunks).map((s) => ({
         heading: s.heading,

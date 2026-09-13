@@ -33,6 +33,52 @@ export async function retrieveChunks(params: {
   return keywordSearch(params.materialId, params.query, pages, limit);
 }
 
+/** Below this, a clipped passage stops saying anything a summary can use. */
+const MIN_OVERVIEW_CHARS = 300;
+
+/**
+ * The material (or one topic) in page order, for "summarise this" requests.
+ *
+ * Similarity search is the wrong tool for an overview: "summarise this pdf"
+ * matches whichever chunks happen to contain the word "summary". An overview
+ * needs every part of the document, so this takes all of it when it fits the
+ * budget, and otherwise an even spread so the last chapter is not dropped.
+ */
+export async function overviewChunks(params: {
+  materialId: string;
+  topicId?: string | undefined;
+  budgetChars: number;
+}): Promise<RetrievedChunk[]> {
+  const pages = await pagesForTopic(params.topicId);
+
+  const rows = await db().chunk.findMany({
+    where: { materialId: params.materialId, ...(pages ? { page: { in: pages } } : {}) },
+    orderBy: { orderIndex: 'asc' },
+    select: { id: true, page: true, sectionTitle: true, content: true },
+  });
+  if (rows.length === 0) return [];
+
+  const total = rows.reduce((sum, row) => sum + row.content.length, 0);
+  const share = Math.floor(params.budgetChars / rows.length);
+
+  const picked =
+    total <= params.budgetChars || share >= MIN_OVERVIEW_CHARS
+      ? rows
+      : rows.filter(
+          (_, index) =>
+            index % Math.ceil((rows.length * MIN_OVERVIEW_CHARS) / params.budgetChars) === 0,
+        );
+
+  const clip =
+    total <= params.budgetChars ? Infinity : Math.max(MIN_OVERVIEW_CHARS, share);
+
+  return picked.map((row) => ({
+    ...row,
+    content: row.content.length > clip ? `${row.content.slice(0, clip)}…` : row.content,
+    similarity: 1,
+  }));
+}
+
 async function pagesForTopic(topicId?: string): Promise<number[] | null> {
   if (!topicId) return null;
   const topic = await db().topic.findUnique({ where: { id: topicId } });
