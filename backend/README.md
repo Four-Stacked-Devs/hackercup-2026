@@ -73,15 +73,22 @@ Deploying to serverless later? Switch `DATABASE_URL` to `6543` and append
 pnpm db:setup    # migrate deploy + seed
 ```
 
-### 2. Groq (free tier)
+### 2. Google Gemini (free tier)
 
-Get a key at [console.groq.com/keys](https://console.groq.com/keys) — no card required.
+Get a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — no card required.
 
 ```bash
-LLM_PROVIDER=groq
-LLM_API_KEY=gsk_...
-LLM_MODEL=llama-3.3-70b-versatile
+LLM_PROVIDER=google
+LLM_API_KEY=AIza...
+LLM_MODEL=gemini-3.8-flash
 ```
+
+Gemini Flash's free tier allows roughly 250K tokens a minute, so a whole module
+ingests in one pass with room for full lessons. Groq also works
+(`LLM_PROVIDER=groq`, `LLM_MODEL=openai/gpt-oss-120b`, key from
+[console.groq.com/keys](https://console.groq.com/keys)), but its free tier caps
+the strong models at about 8K tokens a minute: prompts are trimmed and ingestion
+is paced to fit, so lessons come out slower and thinner.
 
 Without a key the pipeline still runs end to end: topics come from the document's
 own headings, lessons from a structural reformat, questions from cloze extraction.

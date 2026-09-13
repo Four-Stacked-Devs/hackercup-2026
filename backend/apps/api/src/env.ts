@@ -31,9 +31,17 @@ const rawEnvSchema = z.object({
   PGLITE_DIR: z.string().default('./.pglite'),
 
   // LLM
-  LLM_PROVIDER: z.enum(['groq', 'openai', 'anthropic', 'stub']).default('groq'),
+  LLM_PROVIDER: z.enum(['google', 'groq', 'openai', 'anthropic', 'stub']).default('google'),
   LLM_API_KEY: optionalSetting,
-  LLM_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  /** Blank means the provider's default in DEFAULT_LLM_MODEL. */
+  LLM_MODEL: optionalSetting,
+  /** Per-minute pacing. Blank means the provider's free-tier default in DEFAULT_LLM_LIMITS. */
+  LLM_MAX_RPM: optionalSetting.transform((v) => (v ? Number(v) : undefined)).pipe(
+    z.number().int().positive().optional(),
+  ),
+  LLM_MAX_TPM: optionalSetting.transform((v) => (v ? Number(v) : undefined)).pipe(
+    z.number().int().positive().optional(),
+  ),
 
   // Embeddings
   EMBEDDING_PROVIDER: z.enum(['local', 'openai', 'stub']).default('local'),
@@ -78,9 +86,40 @@ export const VECTOR_DIMS = 384;
 /** Which database backend to use. */
 export type DbMode = 'postgres' | 'pglite';
 
+export type LlmProvider = 'google' | 'groq' | 'openai' | 'anthropic' | 'stub';
+
 /** Falling back to the stub keeps the API usable with no credentials at all. */
-const llmProvider: 'groq' | 'openai' | 'anthropic' | 'stub' =
+const llmProvider: LlmProvider =
   raw.LLM_PROVIDER === 'stub' || !raw.LLM_API_KEY ? 'stub' : raw.LLM_PROVIDER;
+
+/**
+ * Gemini Flash is the default because its free tier (no card) allows ~250K
+ * tokens a minute — enough to ingest a whole module in one pass. Groq's free
+ * tier caps its strong models at ~8K a minute, which one lesson call can fill.
+ */
+const DEFAULT_LLM_MODEL: Record<LlmProvider, string> = {
+  google: 'gemini-3.8-flash',
+  groq: 'openai/gpt-oss-120b',
+  openai: 'gpt-5-mini',
+  anthropic: 'claude-haiku-4-5',
+  stub: 'stub-deterministic',
+};
+
+/** Free-tier ceilings, kept just under the published numbers. Paid keys can raise them. */
+const DEFAULT_LLM_LIMITS: Record<LlmProvider, { rpm?: number; tpm?: number }> = {
+  google: { rpm: 10, tpm: 240_000 },
+  groq: { rpm: 28, tpm: 7_500 },
+  openai: {},
+  anthropic: {},
+  stub: {},
+};
+
+const llmModel = raw.LLM_MODEL ?? DEFAULT_LLM_MODEL[llmProvider];
+
+const llmLimits = {
+  rpm: raw.LLM_MAX_RPM ?? DEFAULT_LLM_LIMITS[llmProvider].rpm,
+  tpm: raw.LLM_MAX_TPM ?? DEFAULT_LLM_LIMITS[llmProvider].tpm,
+};
 
 const embeddingProvider: 'local' | 'openai' | 'stub' =
   raw.EMBEDDING_PROVIDER === 'openai' && !(raw.OPENAI_API_KEY ?? raw.LLM_API_KEY)
@@ -91,8 +130,10 @@ const dbMode: DbMode = raw.DATABASE_URL ? 'postgres' : 'pglite';
 
 export const env = {
   ...raw,
+  LLM_MODEL: llmModel,
   dbMode,
   llmProvider,
+  llmLimits,
   embeddingProvider,
   /** True when nothing external is configured — used for the boot banner. */
   isFullyOffline: dbMode === 'pglite' && llmProvider === 'stub',
