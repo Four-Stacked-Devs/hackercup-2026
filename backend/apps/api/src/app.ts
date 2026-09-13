@@ -79,7 +79,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     async (v1) => {
       await v1.register(materialRoutes(queue));
       await v1.register(chatRoutes);
-      await v1.register(practiceRoutes);
+      await v1.register(practiceRoutes(queue));
       await v1.register(progressRoutes);
       await v1.register(planRoutes);
       await v1.register(meRoutes);

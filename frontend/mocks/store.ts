@@ -224,6 +224,7 @@ function seededResponses(): { responses: MockResponse[]; sets: Map<string, MockP
         kind: 'diagnostic',
         status: 'completed',
         reason: null,
+        targetCount: block.questionIds.length,
         createdAt: daysAgo(block.startDaysAgo, -1).toISOString(),
         completedAt: daysAgo(block.startDaysAgo, 1).toISOString(),
       },
@@ -471,6 +472,7 @@ export function listTopics(materialId: string): Topic[] {
     prerequisiteTopicIds: topic.prerequisiteSlugs
       .map((slug) => SEED.topics.find((candidate) => candidate.slug === slug)?.id)
       .filter((id): id is string => Boolean(id)),
+    lessonStatus: 'ready',
     questionCount: SEED.questions.filter((question) => question.topicId === topic.id).length,
     mastery: topicMasteryFor(topic.id),
   }));
@@ -502,6 +504,7 @@ export function getLesson(topicId: string): Lesson | null {
     topicName: topic.name,
     readingTimeMinutes: Math.max(1, Math.round(words / 180)),
     sections,
+    status: 'ready',
     generatedBy: MODEL_LABEL,
     generatedAt: daysAgo(5).toISOString(),
   };
@@ -808,6 +811,7 @@ export function createPracticeSet(input: {
       kind: input.kind,
       status: 'in_progress',
       reason,
+      targetCount: questionIds.length,
       createdAt: new Date().toISOString(),
       completedAt: null,
     },

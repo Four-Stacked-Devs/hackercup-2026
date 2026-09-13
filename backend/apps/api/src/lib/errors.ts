@@ -69,6 +69,13 @@ export const errors = {
       reason ?? 'This material could not be prepared, so there is nothing to show yet.',
     ),
 
+  /** A practice set whose questions are still being written in the background. */
+  practiceSetNotReady: () =>
+    new ApiException(
+      'MATERIAL_NOT_READY',
+      'Your questions are still being written. They will be ready in a moment.',
+    ),
+
   insufficientEvidence: (message?: string) =>
     new ApiException(
       'INSUFFICIENT_EVIDENCE',

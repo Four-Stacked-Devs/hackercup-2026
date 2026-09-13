@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type {
   PracticeSet,
   PracticeSetResult,
@@ -10,7 +11,7 @@ import type {
 import { Card, CardHeader, SectionHeading } from '@/components/ui/card';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
-import { Meter, ProgressRing, StatTile, StepProgress } from '@/components/ui/charts';
+import { Meter, ProgressBar, ProgressRing, StatTile, StepProgress } from '@/components/ui/charts';
 import { Markdown } from '@/components/ui/markdown';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/states';
 import { AlertIcon, CheckIcon, CloseIcon } from '@/components/ui/icons';
@@ -20,6 +21,7 @@ import { DIFFICULTY_LABEL } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import {
   useCompletePracticeSet,
+  useCreatePracticeSet,
   usePracticeSet,
   useSubmitResponse,
 } from '@/lib/hooks/use-practice';
@@ -39,6 +41,9 @@ export function PracticeRunner({ setId }: { setId: string }) {
 
   const set = query.data;
 
+  if (set.status === 'generating') return <GeneratingView set={set} />;
+  if (set.status === 'failed') return <FailedView set={set} />;
+
   if (set.questions.length === 0) {
     return (
       <EmptyState
@@ -54,6 +59,70 @@ export function PracticeRunner({ setId }: { setId: string }) {
   }
 
   return <RunnerBody key={set.id} set={set} />;
+}
+
+/**
+ * The set exists but its questions are still being written. The query polls,
+ * so this turns into the runner by itself the moment they are ready.
+ */
+function GeneratingView({ set }: { set: PracticeSet }) {
+  const ready = set.questions.length;
+  const target = Math.max(set.targetCount, 1);
+
+  return (
+    <Card>
+      <div role="status" aria-live="polite">
+        <p className="font-display font-bold text-ink">Building your questions</p>
+        <p className="mt-1 text-sm text-ink-muted">
+          EDU is writing {target} question{target === 1 ? '' : 's'} from your material. They open
+          here as soon as they are ready — you can leave this page and come back.
+        </p>
+        {/* Never an empty track: the work has started even before the first question lands. */}
+        <ProgressBar
+          className="mt-3"
+          value={Math.max(0.08, ready / target)}
+          label="Building your questions"
+        />
+        {ready > 0 ? (
+          <p className="mt-1.5 text-sm text-ink-muted">
+            {ready} of {target} ready
+          </p>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+/** Nothing could be built. Starting the same set again usually works. */
+function FailedView({ set }: { set: PracticeSet }) {
+  const router = useRouter();
+  const createSet = useCreatePracticeSet();
+
+  const retry = () =>
+    createSet.mutate(
+      {
+        materialId: set.materialId,
+        kind: set.kind,
+        ...(set.topicId ? { topicId: set.topicId } : {}),
+        count: Math.min(20, Math.max(1, set.targetCount || 5)),
+      },
+      { onSuccess: (next) => router.replace(`/practice/${next.id}`) },
+    );
+
+  return (
+    <div className="space-y-3">
+      <EmptyState
+        title="EDU could not build these questions"
+        description="Something went wrong while writing questions from your material. Try again — it usually works the second time."
+        action={
+          <Button variant="primary" onClick={retry} disabled={createSet.isPending}>
+            {createSet.isPending ? 'Starting…' : 'Try again'}
+          </Button>
+        }
+      />
+      {createSet.isError ? <ErrorState error={createSet.error} onRetry={retry} /> : null}
+    </div>
+  );
 }
 
 function RunnerBody({ set }: { set: PracticeSet }) {

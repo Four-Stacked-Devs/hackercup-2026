@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { LearningPlan } from '@educlm/contracts';
 import { db } from '../db/client.js';
+import { createLlmClient } from '../lib/llm.js';
 import { toLearningPlan } from '../lib/serializers.js';
+import { buildPlanGuidance, estimateReadMinutes } from '../modules/agent/plan-guidance.js';
 import {
   adaptPlan,
   computeMasteryByTopic,
@@ -41,64 +43,138 @@ function toStepInput(row: PlanStepRow): PlanStepInput {
   };
 }
 
-/** Build the starting plan: read then practise, topic by topic, in course order. */
-export async function ensurePlan(userId: string, materialId: string) {
+/**
+ * Builds in flight, keyed by user and material.
+ *
+ * The lesson worker prebuilds the owner's plan the moment a material is READY,
+ * which is exactly when the student is likely to open it. Both callers passing
+ * the "no steps yet" check would each write a full set of steps; sharing one
+ * promise makes the second wait for the first instead. In process, like the
+ * job queues.
+ */
+const building = new Map<string, ReturnType<typeof buildPlanIfMissing>>();
+
+export function ensurePlan(
+  userId: string,
+  materialId: string,
+  options: { background?: boolean } = {},
+) {
+  const key = `${userId}:${materialId}`;
+  const inFlight = building.get(key);
+  if (inFlight) return inFlight;
+
+  const build = buildPlanIfMissing(userId, materialId, options.background ?? false).finally(() =>
+    building.delete(key),
+  );
+  building.set(key, build);
+  return build;
+}
+
+/**
+ * Build the starting plan: read then practise, topic by topic, in course order.
+ *
+ * A plan with no steps is treated as one that was never built, not as an empty
+ * plan the student owns. Nothing stops this being reached while a material is
+ * still being prepared — it has no topics yet — and returning that row unchanged
+ * left the student with a permanently empty plan that ingestion never refilled.
+ * Backfilling is safe to repeat: steps are only ever created for a plan that has
+ * none.
+ */
+async function buildPlanIfMissing(userId: string, materialId: string, background: boolean) {
   const existing = await db().learningPlan.findUnique({
     where: { userId_materialId: { userId, materialId } },
     include: { steps: true },
   });
-  if (existing) return existing;
+  if (existing && existing.steps.length > 0) return existing;
 
-  const topics = await db().topic.findMany({
-    where: { materialId },
-    orderBy: { orderIndex: 'asc' },
+  const material = await db().material.findUnique({ where: { id: materialId } });
+
+  // Topics appear partway through ingestion, but the lessons that reading times
+  // are estimated from only exist once it finishes. Planning early also raced
+  // the request that came after READY into building a second set of steps.
+  const topics =
+    material?.status === 'READY'
+      ? await db().topic.findMany({ where: { materialId }, orderBy: { orderIndex: 'asc' } })
+      : [];
+
+  // Still nothing to plan against. Leave the row as it is rather than writing an
+  // empty plan we would have to recognise and repair later.
+  if (existing && topics.length === 0) return existing;
+
+  // Guidance comes from a model call, so it is fetched before the plan row is
+  // re-read below: a concurrent request may have built the steps meanwhile.
+  const guidance = await buildPlanGuidance({
+    materialTitle: material?.title ?? 'Study material',
+    topics,
+    // The prebuild after upload is background work and must not hold up a
+    // student's first question; a student opening the plan is not.
+    llm: createLlmClient(undefined, { background }),
   });
 
-  const plan = await db().learningPlan.create({
-    data: { userId, materialId },
+  const lessons = await db().lessonSection.findMany({
+    where: { topicId: { in: topics.map((t) => t.id) } },
+    select: { topicId: true, bodyMarkdown: true },
   });
+  const lessonText = new Map<string, string>();
+  for (const section of lessons) {
+    const sofar = lessonText.get(section.topicId) ?? '';
+    lessonText.set(section.topicId, `${sofar} ${section.bodyMarkdown}`);
+  }
 
-  let orderIndex = 0;
-  for (const topic of topics) {
-    await db().planStep.create({
-      data: {
+  const current = await db().learningPlan.findUnique({
+    where: { userId_materialId: { userId, materialId } },
+    include: { steps: true },
+  });
+  if (current && current.steps.length > 0) return current;
+
+  const plan =
+    current ??
+    (await db().learningPlan.create({
+      data: { userId, materialId },
+    }));
+
+  // One insert for every step: created one by one, a ten-topic plan was twenty
+  // sequential round trips. Ids are minted here so the first step is known
+  // without reading the rows back.
+  const steps = topics.flatMap((topic, index) => {
+    const guide = guidance.get(topic.id);
+    return [
+      {
+        id: randomUUID(),
         planId: plan.id,
-        kind: 'READ',
+        kind: 'READ' as const,
         title: `Read: ${topic.name}`,
-        description: topic.summary,
+        description: guide?.readFocus ?? topic.summary,
         topicId: topic.id,
         targetType: 'lesson',
         targetId: topic.id,
-        estimatedMinutes: 8,
-        status: orderIndex === 0 ? 'ACTIVE' : 'PENDING',
-        orderIndex: orderIndex++,
+        estimatedMinutes: estimateReadMinutes(
+          lessonText.get(topic.id) ?? '',
+          topic.sourcePages.length,
+        ),
+        status: index === 0 ? ('ACTIVE' as const) : ('PENDING' as const),
+        orderIndex: index * 2,
       },
-    });
-
-    await db().planStep.create({
-      data: {
+      {
+        id: randomUUID(),
         planId: plan.id,
-        kind: 'PRACTICE',
+        kind: 'PRACTICE' as const,
         title: `Practise: ${topic.name}`,
-        description: `A short set of questions on ${topic.name}.`,
+        description: guide?.practiceGoal ?? `A short set of questions on ${topic.name}.`,
         topicId: topic.id,
         targetType: 'practice_set',
         estimatedMinutes: 6,
-        status: 'PENDING',
-        orderIndex: orderIndex++,
+        status: 'PENDING' as const,
+        orderIndex: index * 2 + 1,
       },
-    });
-  }
-
-  const first = await db().planStep.findFirst({
-    where: { planId: plan.id },
-    orderBy: { orderIndex: 'asc' },
+    ];
   });
 
-  if (first) {
+  if (steps.length > 0) {
+    await db().planStep.createMany({ data: steps });
     await db().learningPlan.update({
       where: { id: plan.id },
-      data: { currentStepId: first.id },
+      data: { currentStepId: steps[0]!.id },
     });
   }
 

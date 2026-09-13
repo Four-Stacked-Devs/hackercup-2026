@@ -1,9 +1,6 @@
-import { z } from 'zod';
-import type { LlmClient } from '../../lib/llm.js';
-import type { TopicDraft } from './topics.js';
-
 /**
- * The controlled misconception vocabulary, generated once per material.
+ * The controlled misconception vocabulary, generated once per material as part
+ * of the course map (see topics.ts).
  *
  * The analytics engine groups by EXACT tag match, so free-text tags invented
  * per question would silently break detection: three spellings of the same
@@ -17,22 +14,6 @@ export interface VocabularyEntry {
   label: string;
   description: string;
 }
-
-const vocabularySchema = z.object({
-  tags: z
-    .array(
-      z.object({
-        tag: z
-          .string()
-          .regex(/^[a-z][a-z0-9_]*$/, 'lowercase_with_underscores')
-          .max(60),
-        label: z.string().min(1).max(120),
-        description: z.string().min(1).max(400),
-      }),
-    )
-    .min(3)
-    .max(20),
-});
 
 /**
  * Subject-agnostic fallback. Deliberately about *reasoning* errors rather than
@@ -67,45 +48,42 @@ export const GENERIC_VOCABULARY: VocabularyEntry[] = [
   },
 ];
 
-const SYSTEM = `You name the misconceptions a student is likely to have about a specific
-piece of study material.
+const TAG_PATTERN = /^[a-z][a-z0-9_]*$/;
+const MIN_ENTRIES = 3;
+const MAX_ENTRIES = 20;
 
-Rules:
-- Base every entry on what the material actually covers.
-- tag: lowercase_with_underscores, stable and specific (e.g. assignment_vs_comparison).
-- label: how you would say it to the student, in plain words.
-- description: one sentence explaining the confusion.
-- 5 to 10 entries. Prefer specific, checkable confusions over vague ones like
-  "does not understand the topic".`;
+/** "Assignment vs. Comparison" → "assignment_vs_comparison". */
+function toTag(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^[^a-z]+|_+$/g, '')
+    .slice(0, 60);
+}
 
-export async function buildVocabulary(
-  materialTitle: string,
-  topics: TopicDraft[],
-  llm: LlmClient,
-): Promise<{ entries: VocabularyEntry[]; usedFallback: boolean }> {
-  const outline = topics
-    .map((t) => `- ${t.name}: ${t.summary}`)
-    .join('\n')
-    .slice(0, 6000);
-
-  const { value, usedFallback } = await llm.generateJson({
-    schema: vocabularySchema,
-    system: SYSTEM,
-    prompt: `Material: ${materialTitle}\n\nTopics covered:\n${outline}`,
-    retries: 1,
-    fallback: () => ({ tags: GENERIC_VOCABULARY }),
-  });
-
-  // Deduplicate by tag — the uniqueness constraint is per material.
+/**
+ * Turn the model's misconception list into a usable vocabulary.
+ *
+ * It arrives with the topics in one response, so a single badly formed tag
+ * cannot be allowed to fail the whole course map: each entry is repaired where
+ * possible and dropped where not, duplicates are collapsed (the uniqueness
+ * constraint is per material), and too few survivors means the generic list.
+ */
+export function normaliseVocabulary(
+  raw: { tag: string; label: string; description: string }[],
+): VocabularyEntry[] {
   const seen = new Set<string>();
-  const entries = value.tags.filter((entry) => {
-    if (seen.has(entry.tag)) return false;
-    seen.add(entry.tag);
-    return true;
-  });
+  const entries: VocabularyEntry[] = [];
 
-  return {
-    entries: entries.length > 0 ? entries : GENERIC_VOCABULARY,
-    usedFallback,
-  };
+  for (const entry of raw) {
+    const tag = TAG_PATTERN.test(entry.tag) ? entry.tag.slice(0, 60) : toTag(entry.tag);
+    const label = entry.label.trim().slice(0, 120);
+    const description = entry.description.trim().slice(0, 400);
+
+    if (!TAG_PATTERN.test(tag) || !label || !description || seen.has(tag)) continue;
+    seen.add(tag);
+    entries.push({ tag, label, description });
+  }
+
+  return entries.length >= MIN_ENTRIES ? entries.slice(0, MAX_ENTRIES) : GENERIC_VOCABULARY;
 }

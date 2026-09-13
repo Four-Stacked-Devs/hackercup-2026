@@ -8,6 +8,7 @@ import type {
   LearningPlan,
   Lesson,
   LessonSection,
+  LessonStatus,
   MasteryBand,
   Material,
   MaterialFailure,
@@ -43,6 +44,7 @@ export const toWire = {
   ingestionStage: (v: P.IngestionStage): IngestionStage => lower(v),
   difficulty: (v: P.Difficulty): Difficulty => lower(v),
   sectionKind: (v: P.SectionKind): SectionKind => lower(v),
+  lessonStatus: (v: P.LessonStatus): LessonStatus => lower(v),
   practiceSetKind: (v: P.PracticeSetKind): PracticeSetKind => lower(v),
   practiceSetStatus: (v: P.PracticeSetStatus): PracticeSetStatus => lower(v),
   planStepKind: (v: P.PlanStepKind): PlanStepKind => lower(v),
@@ -70,7 +72,7 @@ const STAGE_MESSAGES: Record<P.IngestionStage, string> = {
   CHUNKING: 'Splitting it into readable pieces',
   EXTRACTING_TOPICS: 'Working out the topics',
   EMBEDDING: 'Indexing it so you can ask questions',
-  BUILDING_LESSONS: 'Rewriting it into accessible lessons',
+  BUILDING_LESSONS: 'Preparing lessons',
   DONE: 'Ready',
 };
 
@@ -168,6 +170,7 @@ export function toLesson(
     sections: ordered.map(toLessonSection),
     generatedBy,
     generatedAt: iso(generatedAt),
+    status: toWire.lessonStatus(topic.lessonStatus),
   };
 }
 

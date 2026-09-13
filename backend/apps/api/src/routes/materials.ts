@@ -20,6 +20,7 @@ import {
   toMaterial,
   toMaterialStatus,
   toTopicMastery,
+  toWire,
 } from '../lib/serializers.js';
 import { buildStorageKey, deleteFile, putFile, sha256 } from '../lib/storage.js';
 import { computeTopicMastery } from '../modules/analytics/index.js';
@@ -198,6 +199,7 @@ export function materialRoutes(queue: JobQueue): FastifyPluginAsyncZod {
               orderIndex: topic.orderIndex,
               sourcePages: topic.sourcePages,
               prerequisiteTopicIds: topic.prerequisiteTopicIds,
+              lessonStatus: toWire.lessonStatus(topic.lessonStatus),
               questionCount: topic._count.questions,
               // null until any response exists — not a zeroed-out band.
               mastery: hasResponses ? toTopicMastery(mastery, topic.name) : null,
@@ -241,6 +243,12 @@ export function materialRoutes(queue: JobQueue): FastifyPluginAsyncZod {
           throw errors.materialFailed(
             'This topic has no lesson yet — EducLM could not turn that part of the material into one.',
           );
+        }
+
+        // Still the draft: the student is reading this one now, so its study
+        // notes jump the queue. The client polls and swaps them in when ready.
+        if (topic.lessonStatus === 'DRAFT' || topic.lessonStatus === 'WRITING') {
+          queue.prioritizeLesson(topic.id);
         }
 
         const generatedBy = sections[0]!.generatedBy;

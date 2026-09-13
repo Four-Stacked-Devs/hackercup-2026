@@ -54,9 +54,15 @@ export function LessonView({
           <ClockIcon width="1em" height="1em" />
           About {lesson.readingTimeMinutes} min to read
           <span aria-hidden="true">·</span>
-          <span>Rewritten for reading by {lesson.generatedBy}</span>
+          <span>
+            {lesson.status === 'ready'
+              ? `Study notes written by ${lesson.generatedBy}`
+              : 'Your material’s own text'}
+          </span>
         </p>
       </header>
+
+      <DraftNotice status={lesson.status} />
 
       <div className="space-y-7">
         {lesson.sections.map((section) => (
@@ -64,6 +70,30 @@ export function LessonView({
         ))}
       </div>
     </article>
+  );
+}
+
+/**
+ * Why a lesson reads like the PDF. A material opens as soon as it is indexed,
+ * with each topic's own text as a draft; study notes replace it when written.
+ */
+function DraftNotice({ status }: { status: Lesson['status'] }) {
+  if (status === 'ready') return null;
+
+  const message =
+    status === 'failed'
+      ? 'Study notes could not be written for this topic, so this is the text straight from your material.'
+      : status === 'writing'
+        ? 'EDU is writing study notes for this topic now. They will replace this text here in a moment.'
+        : 'This is the text straight from your PDF. EDU is writing study notes for it, and they will appear here automatically.';
+
+  return (
+    <p
+      role="status"
+      className="mb-6 rounded-md border border-line bg-surface-sunken px-3 py-2 text-sm text-ink-muted"
+    >
+      {message}
+    </p>
   );
 }
 

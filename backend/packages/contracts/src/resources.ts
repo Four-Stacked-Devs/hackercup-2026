@@ -13,6 +13,7 @@ import {
   planStepStatusSchema,
   practiceSetKindSchema,
   practiceSetStatusSchema,
+  lessonStatusSchema,
   sectionKindSchema,
   trendDirectionSchema,
 } from './primitives.js';
@@ -98,6 +99,7 @@ export const topicSchema = z.object({
   orderIndex: z.number().int().min(0),
   sourcePages: z.array(z.number().int().positive()),
   prerequisiteTopicIds: z.array(z.string()),
+  lessonStatus: lessonStatusSchema,
   questionCount: z.number().int().min(0),
   /** null until any response exists. */
   mastery: topicMasterySchema.nullable(),
@@ -128,6 +130,8 @@ export const lessonSchema = z.object({
   /** Model id — surfaced in the AI-usage label. */
   generatedBy: z.string(),
   generatedAt: isoDateTime,
+  /** Anything but `ready` means study notes may still replace these sections. */
+  status: lessonStatusSchema,
 });
 export type Lesson = z.infer<typeof lessonSchema>;
 
@@ -183,6 +187,8 @@ export const practiceSetSchema = z.object({
   status: practiceSetStatusSchema,
   reason: z.string().nullable(),
   questions: z.array(questionSchema),
+  /** Questions asked for. While `generating`, `questions` holds those ready so far. */
+  targetCount: z.number().int().min(0),
   answeredCount: z.number().int().min(0),
   createdAt: isoDateTime,
   completedAt: isoDateTime.nullable(),

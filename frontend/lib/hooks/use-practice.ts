@@ -14,11 +14,18 @@ import {
 } from '../api/endpoints';
 import { queryKeys } from '../query-keys';
 
+/** How often a set still being written checks whether its questions are ready. */
+const GENERATING_POLL_MS = 2_000;
+
 export function usePracticeSet(setId: string | null) {
   return useQuery({
     queryKey: queryKeys.practiceSet(setId ?? 'none'),
     queryFn: ({ signal }) => getPracticeSet(setId as string, signal),
     enabled: Boolean(setId),
+    // Creating a set returns at once; its questions may still be being written
+    // server-side, so the practice screen polls until it opens.
+    refetchInterval: (query) =>
+      query.state.data?.status === 'generating' ? GENERATING_POLL_MS : false,
   });
 }
 

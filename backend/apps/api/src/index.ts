@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { closeDb, initDb } from './db/client.js';
 import { describeMode, env, envFilesLoaded } from './env.js';
+import { resumeInterruptedIngestion } from './jobs/queue.js';
 
 async function main(): Promise<void> {
   const app = await buildApp();
@@ -24,6 +25,8 @@ async function main(): Promise<void> {
   }
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
+
+  await resumeInterruptedIngestion(app.jobQueue, app.log);
 
   const shutdown = async (signal: string) => {
     app.log.info(`[boot] ${signal} received, shutting down`);

@@ -198,6 +198,9 @@ async function main(): Promise<void> {
         prerequisiteTopicIds: topic.prerequisiteSlugs
           .map((slug) => idBySlug.get(slug))
           .filter((id): id is string => Boolean(id)),
+        // The demo lessons are written in full below. Left at the DRAFT
+        // default, every boot would queue them for the model to rewrite.
+        lessonStatus: 'READY',
       },
     });
 

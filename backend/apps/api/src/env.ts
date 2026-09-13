@@ -42,6 +42,10 @@ const rawEnvSchema = z.object({
   LLM_MAX_TPM: optionalSetting.transform((v) => (v ? Number(v) : undefined)).pipe(
     z.number().int().positive().optional(),
   ),
+  /** Background study-note calls in flight at once. Blank means DEFAULT_LLM_CONCURRENCY. */
+  LLM_CONCURRENCY: optionalSetting.transform((v) => (v ? Number(v) : undefined)).pipe(
+    z.number().int().positive().optional(),
+  ),
 
   // Embeddings
   EMBEDDING_PROVIDER: z.enum(['local', 'openai', 'stub']).default('local'),
@@ -114,6 +118,19 @@ const DEFAULT_LLM_LIMITS: Record<LlmProvider, { rpm?: number; tpm?: number }> = 
   stub: {},
 };
 
+/**
+ * How many topics' study notes are written at once. Groq's free tier is bound by
+ * tokens a minute — one lesson call nearly fills it — so parallel calls there
+ * would only queue inside the pacer. Gemini's quota is wide enough for four.
+ */
+const DEFAULT_LLM_CONCURRENCY: Record<LlmProvider, number> = {
+  google: 4,
+  groq: 1,
+  openai: 4,
+  anthropic: 4,
+  stub: 4,
+};
+
 const llmModel = raw.LLM_MODEL ?? DEFAULT_LLM_MODEL[llmProvider];
 
 const llmLimits = {
@@ -134,6 +151,7 @@ export const env = {
   dbMode,
   llmProvider,
   llmLimits,
+  llmConcurrency: raw.LLM_CONCURRENCY ?? DEFAULT_LLM_CONCURRENCY[llmProvider],
   embeddingProvider,
   /** True when nothing external is configured — used for the boot banner. */
   isFullyOffline: dbMode === 'pglite' && llmProvider === 'stub',

@@ -45,13 +45,30 @@ export const confidenceSchema = z.enum(['none', 'low', 'medium', 'high']);
 
 export const practiceSetKindSchema = z.enum(['diagnostic', 'focused', 'retry']);
 
-export const practiceSetStatusSchema = z.enum(['in_progress', 'completed', 'abandoned']);
+/**
+ * `generating`: the set exists but its questions are still being written; poll it.
+ * `failed`: no question could be built from this material — offer a retry.
+ */
+export const practiceSetStatusSchema = z.enum([
+  'generating',
+  'failed',
+  'in_progress',
+  'completed',
+  'abandoned',
+]);
 
 export const planStepKindSchema = z.enum(['read', 'practice', 'review', 'advance']);
 
 export const planStepStatusSchema = z.enum(['pending', 'active', 'completed', 'skipped']);
 
 export const sectionKindSchema = z.enum(['text', 'table', 'equation', 'figure_description']);
+
+/**
+ * Where a topic's lesson is. `draft` is the material's own text, reformatted
+ * during ingestion so the topic is readable at once; `writing` and `ready` track
+ * the AI study notes that replace it in the background. `failed` keeps the draft.
+ */
+export const lessonStatusSchema = z.enum(['draft', 'writing', 'ready', 'failed']);
 
 export const findingStatusSchema = z.enum(['active', 'resolved', 'dismissed']);
 
@@ -74,6 +91,7 @@ export type PracticeSetStatus = z.infer<typeof practiceSetStatusSchema>;
 export type PlanStepKind = z.infer<typeof planStepKindSchema>;
 export type PlanStepStatus = z.infer<typeof planStepStatusSchema>;
 export type SectionKind = z.infer<typeof sectionKindSchema>;
+export type LessonStatus = z.infer<typeof lessonStatusSchema>;
 export type FindingStatus = z.infer<typeof findingStatusSchema>;
 export type TrendDirection = z.infer<typeof trendDirectionSchema>;
 export type OptionLabel = z.infer<typeof optionLabelSchema>;

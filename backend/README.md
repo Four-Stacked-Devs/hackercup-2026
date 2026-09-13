@@ -87,8 +87,11 @@ Gemini Flash's free tier allows roughly 250K tokens a minute, so a whole module
 ingests in one pass with room for full lessons. Groq also works
 (`LLM_PROVIDER=groq`, `LLM_MODEL=openai/gpt-oss-120b`, key from
 [console.groq.com/keys](https://console.groq.com/keys)), but its free tier caps
-the strong models at about 8K tokens a minute: prompts are trimmed and ingestion
-is paced to fit, so lessons come out slower and thinner.
+the strong models at about 8K tokens a minute: prompts are trimmed and calls are
+paced to fit. A material is still ready within seconds either way — every topic
+opens on a draft of its own text, and the AI study notes replace each draft in
+the background (about one topic a minute on Groq, a few at once on Gemini), the
+topic being read first.
 
 Without a key the pipeline still runs end to end: topics come from the document's
 own headings, lessons from a structural reformat, questions from cloze extraction.
@@ -130,8 +133,10 @@ changed:
 
 Free instances sleep after 15 minutes idle and cold-start in 30–60s; at 0.1 CPU,
 ingest demo material ahead of time rather than live. `.uploads/` is ephemeral,
-which `getFile` tolerates because it is only read during ingestion — but a
-restart between upload and ingestion strands that material.
+which `getFile` tolerates because it is only read during ingestion. A restart
+mid-ingestion re-queues the material at boot, and that re-run fails cleanly if
+the ephemeral upload is already gone; unfinished study notes resume from the
+database and need no file.
 
 ---
 
@@ -158,11 +163,11 @@ apps/api/src/
 ├─ routes/       thin HTTP handlers, one file per resource
 ├─ services/     impure orchestration (DB + engine + LLM)
 ├─ modules/
-│  ├─ ingestion/ extract → chunk → topics → embed → lessons
+│  ├─ ingestion/ extract → chunk → (course map ‖ embed) → draft lessons → READY
 │  ├─ agent/     retrieval, grounded chat, small talk, question generation
 │  └─ analytics/ PURE functions. no I/O, no LLM, no clock
 ├─ db/           prisma client (Supabase or PGlite)
-├─ jobs/         in-process ingestion queue
+├─ jobs/         in-process queues: ingestion, practice sets, study notes + question banks
 └─ lib/          llm, embeddings, pdf, storage, errors, serializers
 
 packages/contracts/   Zod schemas + inferred types + route constants

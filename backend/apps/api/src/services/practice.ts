@@ -7,14 +7,21 @@ import type {
 import { db } from '../db/client.js';
 import { errors } from '../lib/errors.js';
 import { buildSnippet } from '../modules/agent/citations.js';
-import { generateQuestions } from '../modules/agent/questions.js';
+import { randomUUID } from 'node:crypto';
+import { generateQuestionsForTopics } from '../modules/agent/questions.js';
 import type { RetrievedChunk } from '../modules/agent/retrieval.js';
-import { createLlmClient, type LlmLogger } from '../lib/llm.js';
+import {
+  STUB_MODEL_ID,
+  createLlmClient,
+  providerPausedFor,
+  type LlmClient,
+  type LlmLogger,
+} from '../lib/llm.js';
 import { fromWire, toQuestion } from '../lib/serializers.js';
 import { loadResponseInputs } from './analytics-data.js';
 import { listFindings, syncFindings } from './findings.js';
 import { applyAdaptation } from './plan.js';
-import type { PracticeSetKind } from '../generated/prisma/client.js';
+import type { PracticeSetKind, PracticeSetStatus } from '../generated/prisma/client.js';
 
 /**
  * Practice sets.
@@ -24,15 +31,34 @@ import type { PracticeSetKind } from '../generated/prisma/client.js';
  * client — otherwise a judge with devtools open can read the whole quiz.
  */
 
+/** Questions a topic keeps in stock, so a focused set of the default size opens at once. */
+export const BANK_TARGET = 5;
+
+/** The job queue, as far as creating a set needs it. */
+export interface PracticeJobs {
+  enqueuePracticeSet(setId: string): void;
+}
+
+type PracticeLogger = LlmLogger & { error: (msg: string) => void };
+
+/**
+ * Create a practice set without waiting on a model.
+ *
+ * If stored questions cover the set, it is ready at once. Otherwise it is
+ * created GENERATING with whatever is already stored, a background job writes
+ * the rest, and the client polls the set until it turns IN_PROGRESS. Writing
+ * them inside this request made a five-topic diagnostic five sequential model
+ * calls — minutes on a free tier — behind a button that could only spin.
+ */
 export async function createPracticeSet(params: {
   userId: string;
   materialId: string;
   kind: 'diagnostic' | 'focused' | 'retry';
   topicId?: string | undefined;
   count: number;
-  logger: LlmLogger & { error: (msg: string) => void };
+  jobs: PracticeJobs;
 }): Promise<PracticeSet> {
-  const { userId, materialId, kind, topicId, count, logger } = params;
+  const { userId, materialId, kind, topicId, count, jobs } = params;
 
   const material = await db().material.findFirst({ where: { id: materialId, userId } });
   if (!material) throw errors.notFound('That material');
@@ -48,36 +74,16 @@ export async function createPracticeSet(params: {
   const emphasiseTag = topicId ? await activeTagForTopic(userId, topicId) : undefined;
 
   const questionIds: string[] = [];
-  const perTopic = Math.max(1, Math.ceil(count / topics.length));
+  let shortfall = 0;
 
-  for (const topic of topics) {
-    if (questionIds.length >= count) break;
-
-    const needed = Math.min(perTopic, count - questionIds.length);
-    const ids = await questionsForTopic({
-      userId,
-      materialId,
-      topicId: topic.id,
-      topicName: topic.name,
-      needed,
-      kind,
-      emphasiseTag,
-      logger,
-    });
-
+  for (const { topic, needed } of planTopics(topics, count)) {
+    const ids = await selectStoredQuestions({ userId, topicId: topic.id, needed, kind, emphasiseTag });
     questionIds.push(...ids);
-  }
-
-  if (questionIds.length === 0) {
-    throw errors.insufficientEvidence(
-      'We could not build practice questions from this material yet. Try again in a moment.',
-    );
+    shortfall += needed - ids.length;
   }
 
   const reason =
-    kind === 'focused' && emphasiseTag
-      ? await buildFocusedReason(userId, topicId!)
-      : null;
+    kind === 'focused' && emphasiseTag ? await buildFocusedReason(userId, topicId!) : null;
 
   const set = await db().practiceSet.create({
     data: {
@@ -85,27 +91,46 @@ export async function createPracticeSet(params: {
       materialId,
       topicId: topicId ?? null,
       kind: fromWire.practiceSetKind(kind) as PracticeSetKind,
-      status: 'IN_PROGRESS',
+      status: shortfall > 0 ? 'GENERATING' : 'IN_PROGRESS',
       reason,
-      questionIds: questionIds.slice(0, count),
+      questionIds,
+      targetCount: count,
     },
   });
+
+  if (shortfall > 0) jobs.enqueuePracticeSet(set.id);
 
   return hydrateSet(set.id, userId);
 }
 
-/** Reuse stored questions where possible; generate more only when short. */
-async function questionsForTopic(params: {
+/**
+ * Which topics a set draws from, and how many questions each. A diagnostic
+ * spreads the count across topics in course order; a focused set has one topic.
+ */
+export function planTopics<T>(topics: T[], count: number): { topic: T; needed: number }[] {
+  const perTopic = Math.max(1, Math.ceil(count / Math.max(1, topics.length)));
+  const plan: { topic: T; needed: number }[] = [];
+  let allocated = 0;
+
+  for (const topic of topics) {
+    if (allocated >= count) break;
+    const needed = Math.min(perTopic, count - allocated);
+    plan.push({ topic, needed });
+    allocated += needed;
+  }
+
+  return plan;
+}
+
+/** Stored questions for a topic: unseen first, tagged ones first for a focused set. */
+async function selectStoredQuestions(params: {
   userId: string;
-  materialId: string;
   topicId: string;
-  topicName: string;
   needed: number;
   kind: 'diagnostic' | 'focused' | 'retry';
   emphasiseTag: string | undefined;
-  logger: LlmLogger & { error: (msg: string) => void };
 }): Promise<string[]> {
-  const { userId, materialId, topicId, topicName, needed, kind, emphasiseTag, logger } = params;
+  const { userId, topicId, needed, kind, emphasiseTag } = params;
 
   if (kind === 'retry') {
     const wrong = await db().response.findMany({
@@ -125,39 +150,23 @@ async function questionsForTopic(params: {
   const answeredIds = new Set(answered.map((a) => a.questionId));
 
   const stored = await db().question.findMany({
-    where: { topicId },
+    // Rows written before question creation became transactional can still hold
+    // the placeholder key. Serving one scores every answer wrong.
+    where: { topicId, correctOptionId: { not: 'pending' } },
     include: { options: true },
   });
 
-  // Prefer unseen questions; for a focused set, prefer ones carrying the tag.
-  const scored = stored
+  // Model-written before fill-in-the-blank filler, then tagged ones for a focused
+  // set: filler written while the model was unavailable must not keep crowding
+  // out real questions once it is back.
+  const rank = (q: (typeof stored)[number]) =>
+    (q.generatedBy === STUB_MODEL_ID ? 0 : 2) + tagScore(q, emphasiseTag);
+
+  return stored
     .filter((q) => !answeredIds.has(q.id))
-    .sort((a, b) => tagScore(b, emphasiseTag) - tagScore(a, emphasiseTag));
-
-  const chosen = scored.slice(0, needed).map((q) => q.id);
-  if (chosen.length >= needed) return chosen;
-
-  // Not enough — generate the remainder.
-  const missing = needed - chosen.length;
-  const generated = await generateAndStore({
-    materialId,
-    topicId,
-    topicName,
-    count: missing,
-    emphasiseTag,
-    logger,
-  });
-
-  if (generated.length < missing) {
-    // Fall back to repeating already-seen questions rather than a short set.
-    const reused = stored
-      .filter((q) => !chosen.includes(q.id) && !generated.includes(q.id))
-      .slice(0, missing - generated.length)
-      .map((q) => q.id);
-    return [...chosen, ...generated, ...reused];
-  }
-
-  return [...chosen, ...generated];
+    .sort((a, b) => rank(b) - rank(a))
+    .slice(0, needed)
+    .map((q) => q.id);
 }
 
 function tagScore(
@@ -168,45 +177,161 @@ function tagScore(
   return question.options.some((o) => o.misconceptionTag === tag) ? 1 : 0;
 }
 
-async function generateAndStore(params: {
-  materialId: string;
-  topicId: string;
-  topicName: string;
-  count: number;
-  emphasiseTag: string | undefined;
-  logger: LlmLogger & { error: (msg: string) => void };
-}): Promise<string[]> {
-  const { materialId, topicId, topicName, count, emphasiseTag, logger } = params;
+export type FillOutcome = 'ready' | 'failed' | 'skipped';
 
-  const topic = await db().topic.findUnique({ where: { id: topicId } });
-  if (!topic) return [];
+/**
+ * The background half of `createPracticeSet`: write what a GENERATING set is
+ * missing — in one model call, however many topics it spans — then open it.
+ * Anything still short is filled with questions the student has already seen
+ * rather than leaving the set short; nothing at all means FAILED.
+ */
+export async function fillPracticeSet(setId: string, logger: PracticeLogger): Promise<FillOutcome> {
+  const set = await db().practiceSet.findUnique({ where: { id: setId } });
+  if (!set || set.status !== 'GENERATING') return 'skipped';
 
-  const chunkRows = await db().chunk.findMany({
-    where: {
-      materialId,
-      ...(topic.sourcePages.length > 0 ? { page: { in: topic.sourcePages } } : {}),
-    },
+  const topics = await db().topic.findMany({
+    where: { materialId: set.materialId, ...(set.topicId ? { id: set.topicId } : {}) },
     orderBy: { orderIndex: 'asc' },
-    take: 12,
+  });
+  const plan = planTopics(topics, set.targetCount);
+
+  const have = await db().question.findMany({
+    where: { id: { in: set.questionIds } },
+    select: { topicId: true },
+  });
+  const haveByTopic = new Map<string, number>();
+  for (const { topicId } of have) haveByTopic.set(topicId, (haveByTopic.get(topicId) ?? 0) + 1);
+
+  const requests = plan
+    .map(({ topic, needed }) => ({
+      topicId: topic.id,
+      topicName: topic.name,
+      count: needed - (haveByTopic.get(topic.id) ?? 0),
+    }))
+    .filter((request) => request.count > 0);
+
+  const emphasiseTag = set.topicId ? await activeTagForTopic(set.userId, set.topicId) : undefined;
+
+  const generated = await generateAndStore({
+    materialId: set.materialId,
+    requests,
+    emphasiseTag,
+    llm: createLlmClient(logger),
+    logger,
   });
 
-  if (chunkRows.length === 0) return [];
+  const ids = [...set.questionIds, ...generated];
 
-  const chunks: RetrievedChunk[] = chunkRows.map((c) => ({
-    id: c.id,
-    page: c.page,
-    sectionTitle: c.sectionTitle,
-    content: c.content,
-    similarity: 1,
-  }));
+  if (ids.length < set.targetCount) {
+    const reused = await db().question.findMany({
+      where: {
+        topicId: { in: plan.map(({ topic }) => topic.id) },
+        id: { notIn: ids },
+        correctOptionId: { not: 'pending' },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: set.targetCount - ids.length,
+      select: { id: true },
+    });
+    ids.push(...reused.map((q) => q.id));
+  }
+
+  if (ids.length === 0) {
+    await db().practiceSet.update({ where: { id: setId }, data: { status: 'FAILED' } });
+    return 'failed';
+  }
+
+  await db().practiceSet.update({
+    where: { id: setId },
+    data: { questionIds: ids.slice(0, set.targetCount), status: 'IN_PROGRESS' },
+  });
+  return 'ready';
+}
+
+/**
+ * Keep a topic stocked with BANK_TARGET model-written questions, written in the
+ * background after upload, so most practice sets are served from stock without
+ * a model call. Skips a topic that is already stocked — including by a practice
+ * set that got there first.
+ *
+ * Only model-written questions count and only they are stored: a bank is
+ * permanent, and filling it with fill-in-the-blank filler while the provider is
+ * out of quota would serve that filler long after the model is back. While it
+ * is out, the job is deferred rather than run.
+ */
+export async function stockQuestionBank(
+  topicId: string,
+  llm: LlmClient,
+  logger: PracticeLogger,
+): Promise<'stocked' | 'skipped' | 'failed' | 'deferred'> {
+  if (providerPausedFor() > 0) return 'deferred';
+
+  const topic = await db().topic.findUnique({ where: { id: topicId } });
+  if (!topic) return 'skipped';
+
+  const stocked = await db().question.count({
+    where: { topicId, correctOptionId: { not: 'pending' }, generatedBy: { not: STUB_MODEL_ID } },
+  });
+  if (stocked >= BANK_TARGET) return 'skipped';
+
+  const ids = await generateAndStore({
+    materialId: topic.materialId,
+    requests: [{ topicId, topicName: topic.name, count: BANK_TARGET - stocked }],
+    emphasiseTag: undefined,
+    llm,
+    logger,
+    keepFallback: false,
+  });
+
+  if (ids.length > 0) return 'stocked';
+  return providerPausedFor() > 0 ? 'deferred' : 'failed';
+}
+
+/** Generate questions for one or more topics in a single call, and store them. */
+async function generateAndStore(params: {
+  materialId: string;
+  requests: { topicId: string; topicName: string; count: number }[];
+  emphasiseTag: string | undefined;
+  llm: LlmClient;
+  logger: PracticeLogger;
+  /**
+   * Store the deterministic filler when the model fails. Yes for a set a
+   * student is waiting on; no for the bank, which should wait for the model.
+   */
+  keepFallback?: boolean;
+}): Promise<string[]> {
+  const { materialId, requests, emphasiseTag, llm, logger, keepFallback = true } = params;
+  if (requests.length === 0) return [];
+
+  const topicRows = await db().topic.findMany({
+    where: { id: { in: requests.map((r) => r.topicId) } },
+    select: { id: true, sourcePages: true },
+  });
+  const pagesByTopic = new Map(topicRows.map((t) => [t.id, t.sourcePages]));
+
+  const topics = await Promise.all(
+    requests.map(async (request) => {
+      const pages = pagesByTopic.get(request.topicId) ?? [];
+      const rows = await db().chunk.findMany({
+        where: { materialId, ...(pages.length > 0 ? { page: { in: pages } } : {}) },
+        orderBy: { orderIndex: 'asc' },
+        take: 12,
+      });
+      const chunks: RetrievedChunk[] = rows.map((c) => ({
+        id: c.id,
+        page: c.page,
+        sectionTitle: c.sectionTitle,
+        content: c.content,
+        similarity: 1,
+      }));
+      return { ...request, chunks };
+    }),
+  );
 
   const vocabulary = await db().misconceptionTag.findMany({ where: { materialId } });
-  const llm = createLlmClient(logger);
 
-  const generated = await generateQuestions({
-    topicName,
-    chunks,
-    count,
+  const generated = await generateQuestionsForTopics({
+    topics,
     vocabulary,
     llm,
     emphasiseTag,
@@ -216,39 +341,49 @@ async function generateAndStore(params: {
   const ids: string[] = [];
 
   for (const question of generated) {
-    const chunk = chunks.find((c) => c.page === question.sourcePage) ?? chunks[0]!;
+    if (question.usedFallback && !keepFallback) continue;
+
+    const chunks = topics.find((t) => t.topicId === question.topicId)?.chunks ?? [];
+    const chunk = chunks.find((c) => c.page === question.sourcePage) ?? chunks[0];
+
+    // Option ids are minted here so the question can point at its correct one
+    // in the same write — no placeholder key, no second statement, nothing
+    // half-written to roll back. `validateQuestion` already guaranteed the
+    // correct label is one of the four.
+    const options = question.options.map((option) => ({ id: randomUUID(), ...option }));
+    const correct = options.find((option) => option.label === question.correctLabel)!;
 
     const row = await db().question.create({
       data: {
         materialId,
-        topicId,
+        topicId: question.topicId,
         stem: question.stem,
         difficulty: fromWire.difficulty(question.difficulty),
         sourcePage: question.sourcePage,
-        sourceChunkId: chunk.id,
-        correctOptionId: 'pending',
+        sourceChunkId: chunk?.id ?? null,
+        correctOptionId: correct.id,
         explanation: question.explanation,
-        generatedBy: llm.modelId,
+        // The deterministic builder and the model produce the same shape, so
+        // recording the configured model for both would credit work it did
+        // not do — and the AI-use page reads this field.
+        generatedBy: question.usedFallback ? STUB_MODEL_ID : llm.modelId,
         options: {
-          create: question.options.map((option) => ({
+          create: options.map((option) => ({
+            id: option.id,
             label: option.label,
             text: option.text,
             misconceptionTag: option.misconceptionTag,
           })),
         },
       },
-      include: { options: true },
-    });
-
-    const correct = row.options.find((o) => o.label === question.correctLabel);
-    if (!correct) continue;
-
-    await db().question.update({
-      where: { id: row.id },
-      data: { correctOptionId: correct.id },
+      select: { id: true },
     });
 
     ids.push(row.id);
+  }
+
+  if (generated.length < requests.reduce((sum, r) => sum + r.count, 0)) {
+    logger.warn(`[practice] generated ${generated.length} of the questions requested`);
   }
 
   return ids;
@@ -272,6 +407,16 @@ async function buildFocusedReason(userId: string, topicId: string): Promise<stri
   return `Focused practice after ${finding.label.toLowerCase()} in ${finding.occurrences} of your last ${finding.windowSize} answers`;
 }
 
+/** A set still being written, or one that could not be, cannot be answered or completed. */
+function assertOpen(status: PracticeSetStatus): void {
+  if (status === 'GENERATING') throw errors.practiceSetNotReady();
+  if (status === 'FAILED') {
+    throw errors.insufficientEvidence(
+      'We could not build practice questions from this material. Start a new set to try again.',
+    );
+  }
+}
+
 // ─── Reading a set ───────────────────────────────────────────────────────────
 
 export async function hydrateSet(setId: string, userId: string): Promise<PracticeSet> {
@@ -291,7 +436,14 @@ export async function hydrateSet(setId: string, userId: string): Promise<Practic
     return row ? [toQuestion(row, row.topic.name)] : [];
   });
 
-  const answeredCount = await db().response.count({ where: { practiceSetId: set.id } });
+  // Distinct questions, not response rows: re-answering one used to push this
+  // past `questions.length`, and the runner seeds its starting index from it.
+  const answered = await db().response.findMany({
+    where: { practiceSetId: set.id },
+    select: { questionId: true },
+    distinct: ['questionId'],
+  });
+  const answeredCount = answered.length;
 
   const topic = set.topicId ? await db().topic.findUnique({ where: { id: set.topicId } }) : null;
 
@@ -304,6 +456,7 @@ export async function hydrateSet(setId: string, userId: string): Promise<Practic
     status: set.status.toLowerCase() as PracticeSet['status'],
     reason: set.reason,
     questions,
+    targetCount: Math.max(set.targetCount, questions.length),
     answeredCount,
     createdAt: set.createdAt.toISOString(),
     completedAt: set.completedAt?.toISOString() ?? null,
@@ -324,6 +477,7 @@ export async function recordResponse(params: {
 
   const set = await db().practiceSet.findFirst({ where: { id: setId, userId } });
   if (!set) throw errors.notFound('That practice set');
+  assertOpen(set.status);
 
   if (!set.questionIds.includes(questionId)) {
     throw errors.validation('That question is not part of this practice set.');
@@ -430,6 +584,7 @@ export async function completeSet(params: {
 
   const set = await db().practiceSet.findFirst({ where: { id: setId, userId } });
   if (!set) throw errors.notFound('That practice set');
+  assertOpen(set.status);
 
   await db().practiceSet.update({
     where: { id: setId },

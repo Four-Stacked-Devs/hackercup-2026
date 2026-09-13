@@ -1,12 +1,19 @@
 import { z } from 'zod';
 import type { LlmClient } from '../../lib/llm.js';
 import type { ChunkDraft } from './chunk.js';
+import { GENERIC_VOCABULARY, normaliseVocabulary, type VocabularyEntry } from './vocabulary.js';
 
 /**
- * Topic extraction — one LLM call over headings and chunk openings.
+ * The course map — one LLM call over the material's page-by-page text that
+ * returns both the topics and the misconception vocabulary.
  *
- * If the model is unavailable or returns unusable JSON twice, we fall back to
- * heading-based segmentation. Ingestion never hard-fails on an LLM hiccup.
+ * They used to be two calls, back to back, on the path the student waits on.
+ * The second only ever read the first one's output, so asking for both at once
+ * costs one round trip instead of two with nothing lost.
+ *
+ * If the model is unavailable or returns unusable JSON twice, topics fall back
+ * to heading-based segmentation and the vocabulary to the generic list.
+ * Ingestion never hard-fails on an LLM hiccup.
  */
 
 export interface TopicDraft {
@@ -27,11 +34,18 @@ const llmTopicSchema = z.object({
         name: z.string().min(1).max(120),
         summary: z.string().min(1).max(600),
         sourcePages: z.array(z.number().int().positive()).min(1),
-        prerequisiteSlugs: z.array(z.string()).default([]),
+        // Required, not defaulted: Groq's strict JSON mode rejects any schema
+        // whose properties are not all required. The prompt asks for [] instead.
+        prerequisiteSlugs: z.array(z.string()),
       }),
     )
     .min(MIN_TOPICS)
     .max(MAX_TOPICS),
+  // Deliberately loose: one malformed tag must not throw away the topics with
+  // it. normaliseVocabulary repairs or drops each entry afterwards.
+  misconceptions: z.array(
+    z.object({ tag: z.string(), label: z.string(), description: z.string() }),
+  ),
 });
 
 export function slugify(value: string): string {
@@ -117,48 +131,101 @@ function buildExtractiveSummary(texts: string[]): string {
   return summary.length > 400 ? `${summary.slice(0, 397)}...` : summary;
 }
 
-/** Compact outline given to the model: headings plus a short opening excerpt. */
-function buildOutline(chunks: ChunkDraft[]): string {
-  const lines: string[] = [];
-  let lastTitle: string | null = null;
+/**
+ * Page-by-page text given to the model, as much of each page as the budget allows.
+ *
+ * Headings plus a 160-character opening used to be all it saw, which is nothing
+ * for a slide deck: most slides have no detectable heading, so the model was
+ * naming topics from fragments. Splitting the budget evenly across pages keeps
+ * a long document's later chapters from being cut off entirely.
+ */
+export function buildOutline(chunks: ChunkDraft[], budgetChars: number): string {
+  const byPage = new Map<number, { title: string | null; text: string[] }>();
 
   for (const chunk of chunks) {
-    if (chunk.sectionTitle !== lastTitle) {
-      lines.push(`\n## ${chunk.sectionTitle ?? 'Untitled'} (p.${chunk.page})`);
-      lastTitle = chunk.sectionTitle;
-    }
-    lines.push(`- p.${chunk.page}: ${chunk.content.slice(0, 160).replace(/\s+/g, ' ')}`);
+    const entry = byPage.get(chunk.page) ?? { title: chunk.sectionTitle, text: [] };
+    entry.text.push(chunk.content);
+    byPage.set(chunk.page, entry);
   }
 
-  return lines.join('\n').slice(0, 12_000);
+  const perPage = Math.max(200, Math.floor(budgetChars / Math.max(1, byPage.size)));
+
+  return [...byPage.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([page, { title, text }]) => {
+      const body = text.join(' ').replace(/\s+/g, ' ').trim();
+      const clipped = body.length > perPage ? `${body.slice(0, perPage)}…` : body;
+      return `[p.${page}]${title ? ` (${title})` : ''}\n${clipped}`;
+    })
+    .join('\n\n')
+    .slice(0, budgetChars);
 }
 
-const SYSTEM = `You organise study material into topics for a high-school student.
+const SYSTEM = `You design the topic structure of a study guide built from a student's own
+course material (lecture slides, handouts, or textbook chapters).
+
+Read the page-by-page text and group it into the topics a student would study.
 
 Rules:
-- Use ONLY the outline provided. Never invent a topic the material does not cover.
+- Ground every topic in the pages given. Never invent a topic the material does
+  not cover.
 - Order topics the way the material teaches them.
-- sourcePages must be page numbers that appear in the outline.
-- prerequisiteSlugs may only reference other topics you are returning, using a
-  lowercase_underscore form of their name. Use [] when unsure.
-- Between 3 and 10 topics for a typical module. Prefer fewer, broader topics
-  over many tiny ones.
-- Summaries: one or two plain sentences a 16-year-old would understand.`;
+- Skip pages with nothing to learn: cover or title slides, agendas, "thank you"
+  or "questions?" slides, reference lists, and admin notes. Do not make topics
+  from them.
+- Name each topic after the concept it teaches (for example "Fetching data with
+  useEffect"), never after its position ("Part 2", "Slide 5") or a bare generic
+  word ("Introduction", "Overview", "Summary").
+- sourcePages: list EVERY page the topic draws on, not just the first one.
+  Every number must be a page shown to you.
+- summary: 2-3 plain sentences saying what the topic is about and what the
+  student will understand or be able to do after studying it. Name the key
+  terms it introduces.
+- prerequisiteSlugs: other topics in your list that must be understood first,
+  written as the lowercase_underscore form of their exact name. Use [] when
+  none.
+- Aim for 3 to 10 topics. Prefer fewer, meaningful topics over many tiny ones;
+  a short deck may only need 2 to 4.
+- Keep the subject at the material's own level. Simplify the language, not the
+  content.
 
-export async function extractTopics(
+Also list the misconceptions a student is likely to have about THIS material
+(5 to 10 entries), used to tag wrong answers in practice questions:
+- Base every entry on what the material actually covers.
+- tag: lowercase_with_underscores, stable and specific (for example
+  assignment_vs_comparison).
+- label: how you would say it to the student, in plain words.
+- description: one sentence explaining the confusion.
+- Prefer specific, checkable confusions over vague ones like "does not
+  understand the topic".`;
+
+export interface CourseMap {
+  topics: TopicDraft[];
+  vocabulary: VocabularyEntry[];
+  usedFallback: boolean;
+}
+
+export async function extractCourseMap(
   chunks: ChunkDraft[],
   llm: LlmClient,
-): Promise<{ topics: TopicDraft[]; usedFallback: boolean }> {
-  if (chunks.length === 0) return { topics: [], usedFallback: true };
+  materialTitle?: string,
+): Promise<CourseMap> {
+  if (chunks.length === 0) {
+    return { topics: [], vocabulary: GENERIC_VOCABULARY, usedFallback: true };
+  }
 
   const validPages = new Set(chunks.map((c) => c.page));
+  const heading = materialTitle ? `Material: ${materialTitle}\n\n` : '';
 
   const { value, usedFallback } = await llm.generateJson({
     schema: llmTopicSchema,
     system: SYSTEM,
-    prompt: `Outline of the material:\n${buildOutline(chunks)}`,
+    prompt: `${heading}Page-by-page text:\n\n${buildOutline(chunks, llm.budget.inputChars)}`,
     retries: 1,
-    fallback: () => ({ topics: segmentTopicsByHeading(chunks).map(stripSlug) }),
+    fallback: () => ({
+      topics: segmentTopicsByHeading(chunks).map(stripSlug),
+      misconceptions: GENERIC_VOCABULARY,
+    }),
   });
 
   const drafts = value.topics.map((topic) => ({
@@ -172,12 +239,13 @@ export async function extractTopics(
 
   // A topic whose every page was invented is not grounded — discard it.
   const grounded = drafts.filter((t) => t.sourcePages.length > 0);
+  const vocabulary = normaliseVocabulary(value.misconceptions);
 
   if (grounded.length === 0) {
-    return { topics: segmentTopicsByHeading(chunks), usedFallback: true };
+    return { topics: segmentTopicsByHeading(chunks), vocabulary, usedFallback: true };
   }
 
-  return { topics: dedupeSlugs(grounded), usedFallback };
+  return { topics: dedupeSlugs(grounded), vocabulary, usedFallback };
 }
 
 /** The LLM schema has no `slug`; the fallback produces one. Align the shapes. */

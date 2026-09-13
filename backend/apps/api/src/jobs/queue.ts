@@ -1,5 +1,8 @@
 import PQueue from 'p-queue';
+import { db } from '../db/client.js';
 import { runIngestion, type PipelineLogger } from '../modules/ingestion/pipeline.js';
+import { createLessonWorker } from './lessons.js';
+import { createPracticeWorker } from './practice.js';
 
 /**
  * In-process background queue for the MVP.
@@ -13,6 +16,12 @@ import { runIngestion, type PipelineLogger } from '../modules/ingestion/pipeline
  */
 export interface JobQueue {
   enqueueIngestion(materialId: string): void;
+  /** Queue study notes for every topic of a READY material still on its draft. */
+  enqueueLessons(materialId: string): void;
+  /** A student opened this topic's draft: write its notes next. */
+  prioritizeLesson(topicId: string): void;
+  /** Fill a practice set created GENERATING. */
+  enqueuePracticeSet(setId: string): void;
   /** Test/shutdown helper. */
   onIdle(): Promise<void>;
   readonly pending: number;
@@ -20,12 +29,20 @@ export interface JobQueue {
 
 export function createJobQueue(logger: PipelineLogger): JobQueue {
   const queue = new PQueue({ concurrency: 1 });
+  const lessons = createLessonWorker(logger);
+  const practice = createPracticeWorker(logger);
+
+  const enqueueLessons = (materialId: string) => {
+    lessons.enqueueMaterial(materialId).catch((error) => {
+      logger.error(`[queue] could not queue study notes: ${(error as Error).message}`);
+    });
+  };
 
   return {
     enqueueIngestion(materialId: string) {
       void queue.add(async () => {
         try {
-          await runIngestion(materialId, logger);
+          await runIngestion(materialId, logger, { onReady: enqueueLessons });
         } catch (error) {
           // runIngestion already records failure on the material row; this is
           // the last-resort guard so one bad job cannot take down the worker.
@@ -34,10 +51,69 @@ export function createJobQueue(logger: PipelineLogger): JobQueue {
       });
     },
 
-    onIdle: () => queue.onIdle(),
+    enqueueLessons,
+
+    prioritizeLesson: (topicId) => lessons.prioritize(topicId),
+
+    enqueuePracticeSet: (setId) => practice.enqueue(setId),
+
+    onIdle: async () => {
+      await queue.onIdle();
+      await Promise.all([lessons.onIdle(), practice.onIdle()]);
+    },
 
     get pending() {
-      return queue.size + queue.pending;
+      return queue.size + queue.pending + lessons.pending + practice.pending;
     },
   };
+}
+
+/**
+ * Re-queue work a restart interrupted: uploads mid-ingestion, READY materials
+ * with topics still waiting for their study notes, and practice sets whose
+ * questions were still being written.
+ *
+ * The queue lives in process memory, so a restart mid-ingestion — every file
+ * save under `tsx watch`, every deploy — dropped the job and left its material
+ * PROCESSING forever, the progress bar frozen wherever it stopped. With one
+ * API process, anything still PROCESSING at boot is exactly such an orphan, and
+ * every stage clears its own output before writing, so running it again from
+ * the top is safe. Swapping in BullMQ (or running several API processes) makes
+ * this the broker's job instead.
+ */
+export async function resumeInterruptedIngestion(
+  queue: JobQueue,
+  logger: PipelineLogger,
+): Promise<number> {
+  const orphans = await db().material.findMany({
+    where: { status: 'PROCESSING' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  for (const { id } of orphans) queue.enqueueIngestion(id);
+
+  const unfinished = await db().material.findMany({
+    where: { status: 'READY', topics: { some: { lessonStatus: { in: ['DRAFT', 'WRITING'] } } } },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  for (const { id } of unfinished) queue.enqueueLessons(id);
+
+  const sets = await db().practiceSet.findMany({
+    where: { status: 'GENERATING' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  for (const { id } of sets) queue.enqueuePracticeSet(id);
+
+  const resumed = orphans.length + unfinished.length + sets.length;
+  if (resumed > 0) {
+    logger.info(
+      `[queue] resumed ${orphans.length} upload(s), study notes for ${unfinished.length} material(s) and ${sets.length} practice set(s) interrupted by a restart`,
+    );
+  }
+  return resumed;
 }

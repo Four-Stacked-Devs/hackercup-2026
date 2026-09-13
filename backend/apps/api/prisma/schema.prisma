@@ -133,6 +133,9 @@ model Topic {
   orderIndex           Int
   sourcePages          Int[]
   prerequisiteTopicIds String[]
+  /// DRAFT: the structural reformat written during ingestion. The AI study notes
+  /// replace it in the background, so a material is usable before they exist.
+  lessonStatus         LessonStatus @default(DRAFT)
   createdAt            DateTime @default(now())
 
   material  Material               @relation(fields: [materialId], references: [id], onDelete: Cascade)
@@ -162,6 +165,13 @@ model LessonSection {
   topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
   @@index([topicId, orderIndex])
+}
+
+enum LessonStatus {
+  DRAFT
+  WRITING
+  READY
+  FAILED
 }
 
 enum SectionKind {
@@ -236,6 +246,9 @@ model PracticeSet {
   status      PracticeSetStatus @default(IN_PROGRESS)
   reason      String? // "Focused practice after 3 comparison-operator errors"
   questionIds String[]
+  /// How many questions the set was asked for. While GENERATING, `questionIds`
+  /// holds only the ones ready so far.
+  targetCount Int               @default(0)
   createdAt   DateTime          @default(now())
   completedAt DateTime?
 
@@ -253,6 +266,8 @@ enum PracticeSetKind {
 }
 
 enum PracticeSetStatus {
+  GENERATING // questions are being written in the background
+  FAILED // no question could be built; the student is offered a retry
   IN_PROGRESS
   COMPLETED
   ABANDONED

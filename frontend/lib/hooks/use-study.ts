@@ -28,11 +28,21 @@ export function useTopics(materialId: string | null) {
   });
 }
 
+/** How often an open draft checks whether its study notes have landed. */
+const LESSON_DRAFT_POLL_MS = 3_000;
+
 export function useLesson(materialId: string | null, topicId: string | null) {
   return useQuery({
     queryKey: queryKeys.lesson(materialId ?? 'none', topicId ?? 'none'),
     queryFn: ({ signal }) => getLesson(materialId as string, topicId as string, signal),
     enabled: Boolean(materialId && topicId),
+    // A draft is replaced in place once its study notes are written, so keep
+    // asking while the student reads it. Opening it also moves it to the front
+    // of the server's queue.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'draft' || status === 'writing' ? LESSON_DRAFT_POLL_MS : false;
+    },
   });
 }
 
