@@ -31,8 +31,11 @@ const nextConfig: NextConfig = {
       unmanagedPaths: [...(config.snapshot?.unmanagedPaths ?? []), CONTRACTS],
     };
 
-    // And pick up a rebuild while `next dev` is running.
-    config.watchOptions = { ...config.watchOptions, ignored: WATCH_IGNORED };
+    // And pick up a rebuild while `next dev` is running. The package is a
+    // symlink into the backend workspace, and the watcher does not follow
+    // symlinks unless told to — without this a rebuilt contract was only seen
+    // after a restart.
+    config.watchOptions = { ...config.watchOptions, ignored: WATCH_IGNORED, followSymlinks: true };
 
     return config;
   },
