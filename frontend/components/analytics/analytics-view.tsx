@@ -53,7 +53,11 @@ export function AnalyticsView({ materialId }: { materialId: string }) {
   const overview = query.data;
   const { totals, trend, masteryByTopic } = overview;
 
-  const strongCount = masteryByTopic.filter((topic) => topic.band === 'strong').length;
+  // `masteryByTopic` covers every topic in the material, practised or not, so
+  // counting against its length contradicted the tile's own hint — and disagreed
+  // with the identical tile on the Progress screen.
+  const practised = masteryByTopic.filter((topic) => topic.band !== 'insufficient_data');
+  const strongCount = practised.filter((topic) => topic.band === 'strong').length;
   const weakTopics = masteryByTopic.filter((topic) => topic.band === 'needs_attention');
 
   return (
@@ -78,7 +82,7 @@ export function AnalyticsView({ materialId }: { materialId: string }) {
         />
         <StatTile
           label="Topics strong"
-          value={`${strongCount} / ${masteryByTopic.length}`}
+          value={`${strongCount} / ${practised.length}`}
           hint="Of the topics you have practised"
         />
       </section>

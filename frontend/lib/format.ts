@@ -1,4 +1,10 @@
-import type { Confidence, Difficulty, MasteryBand, PlanStepKind } from '@educlm/contracts';
+import type {
+  Confidence,
+  Difficulty,
+  MasteryBand,
+  PlanStep,
+  PlanStepKind,
+} from '@educlm/contracts';
 
 /**
  * Every band carries a word. Colour never carries meaning on its own — that is
@@ -75,8 +81,52 @@ export function clockTime(iso: string): string {
   );
 }
 
+/**
+ * A calendar date, not an instant.
+ *
+ * The analytics trend keys its buckets by UTC day (`"2026-09-09"`), and
+ * `new Date` reads a bare date string as UTC midnight — which every timezone
+ * west of UTC then formats as the day before. Days are read as written.
+ */
 export function shortDate(iso: string): string {
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(
-    new Date(iso),
-  );
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(iso));
+}
+
+export interface PlanProgress {
+  /** Steps still in play: everything the student has not skipped. */
+  total: number;
+  completed: number;
+  /** Minutes left across the steps that are neither done nor skipped. */
+  remainingMinutes: number;
+  /** 0..1, or null when nothing is outstanding. */
+  completion: number | null;
+}
+
+/**
+ * One reading of how far a plan has got, for every figure on the plan screen.
+ *
+ * They used to disagree: "Time left" excluded skipped steps while "Steps done"
+ * and "Overall progress" counted them in the denominator, so a plan the student
+ * had fully triaged — five done, five skipped — read "0 min left · 5 of 10
+ * steps · 50%" and could never reach 100%.
+ *
+ * A skipped step is a decision, not outstanding work, so it leaves both sides of
+ * the fraction.
+ */
+export function planProgress(steps: readonly PlanStep[]): PlanProgress {
+  const outstanding = steps.filter((step) => step.status !== 'skipped');
+  const completed = outstanding.filter((step) => step.status === 'completed').length;
+
+  return {
+    total: outstanding.length,
+    completed,
+    remainingMinutes: outstanding
+      .filter((step) => step.status !== 'completed')
+      .reduce((total, step) => total + step.estimatedMinutes, 0),
+    completion: outstanding.length === 0 ? null : completed / outstanding.length,
+  };
 }

@@ -33,10 +33,24 @@ export function useCreatePracticeSet() {
   });
 }
 
-/** The answer reveal is always this round-trip: the question carries no key. */
-export function useSubmitResponse(setId: string) {
+/**
+ * The answer reveal is always this round-trip: the question carries no key.
+ *
+ * Every answer moves mastery, findings and the trend server-side, so the screens
+ * built on those are stale from the moment it lands. Invalidating only on
+ * completion meant abandoning a set half-way left Progress and Analytics showing
+ * pre-answer numbers.
+ */
+export function useSubmitResponse(setId: string, materialId: string | null) {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (body: SubmitResponseRequest) => submitResponse(setId, body),
+    onSuccess: () => {
+      if (!materialId) return;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.progress(materialId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.topics(materialId) });
+    },
   });
 }
 

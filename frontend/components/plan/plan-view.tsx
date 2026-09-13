@@ -9,7 +9,7 @@ import { ProgressRing } from '@/components/ui/charts';
 import { ErrorState, ScreenSkeleton } from '@/components/ui/states';
 import { EduSays } from '@/components/brand/edu-mascot';
 import { CheckIcon } from '@/components/ui/icons';
-import { STEP_KIND_LABEL, minutesLabel } from '@/lib/format';
+import { STEP_KIND_LABEL, minutesLabel, planProgress } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import {
   useCompletePlanStep,
@@ -43,10 +43,12 @@ export function PlanView({
   }
 
   const plan = query.data;
-  const done = plan.steps.filter((step) => step.status === 'completed').length;
-  const remaining = plan.steps
-    .filter((step) => step.status !== 'completed' && step.status !== 'skipped')
-    .reduce((total, step) => total + step.estimatedMinutes, 0);
+
+  // One reading for every figure on this screen — they used to disagree about
+  // whether a skipped step still counted. See `planProgress`.
+  const { total, completed: done, remainingMinutes: remaining, completion } = planProgress(
+    plan.steps,
+  );
 
   const current =
     plan.steps.find((step) => step.id === plan.currentStepId) ??
@@ -59,10 +61,10 @@ export function PlanView({
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Goal" value={`Master ${materialTitle}`} />
           <Stat label="Time left" value={minutesLabel(remaining)} />
-          <Stat label="Steps done" value={`${done} of ${plan.steps.length}`} />
+          <Stat label="Steps done" value={`${done} of ${total}`} />
           <Stat
             label="Overall progress"
-            value={plan.steps.length === 0 ? '—' : `${Math.round((done / plan.steps.length) * 100)}%`}
+            value={completion === null ? '—' : `${Math.round(completion * 100)}%`}
           />
         </dl>
       </Card>
@@ -73,7 +75,7 @@ export function PlanView({
         <Card>
           <CardHeader
             title="Study plan overview"
-            description={`${done} of ${plan.steps.length} steps done`}
+            description={`${done} of ${total} steps done`}
             action={
               <span
                 className="text-xs text-ink-subtle"
@@ -111,7 +113,7 @@ export function PlanView({
               <SectionHeading title="All progress" level={3} />
               <div className="flex justify-center">
                 <ProgressRing
-                  value={plan.steps.length === 0 ? 0 : done / plan.steps.length}
+                  value={completion ?? 0}
                   caption="of the plan"
                   size={124}
                 />
@@ -291,7 +293,15 @@ function FocusAreas({ materialId }: { materialId: string }) {
   return (
     <Card>
       <SectionHeading title="Focus areas" level={3} />
-      {focus.length === 0 ? (
+      {/* "Nothing is flagged" is a finding, not a placeholder. An empty list
+          while the request is in flight — or failed — is not the same thing. */}
+      {!progress.isSuccess ? (
+        <p className="text-xs text-ink-muted">
+          {progress.isError
+            ? 'Your weak spots could not be read just now.'
+            : 'Checking where you are weakest…'}
+        </p>
+      ) : focus.length === 0 ? (
         <p className="text-xs text-ink-muted">
           Nothing is flagged right now. Practise a topic and any weak spot appears here.
         </p>

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import {
   aiDisclosureSchema,
   learningPlanSchema,
@@ -158,5 +158,36 @@ describe('the seeded demo state matches the backend seed', () => {
 
     store.dismissFinding(before!.id);
     expect(store.progressOverview(store.MATERIAL_ID).topFinding).toBeNull();
+  });
+});
+
+/**
+ * A finished upload used to report 24 pages and 5 topics from two literals,
+ * while the fixture behind every other endpoint had 42 pages and 8 topics. The
+ * card and the study screen disagreed, and citations pointed past the page count
+ * the card claimed.
+ */
+describe('a completed upload agrees with what the mock actually serves', () => {
+  beforeEach(() => store.resetStore());
+
+  it('reports the page and topic counts its own endpoints serve', () => {
+    vi.useFakeTimers();
+    try {
+      const created = store.startUpload('module.pdf', 'Module', false);
+
+      vi.advanceTimersByTime(9_000);
+      store.advanceUploads();
+
+      const ready = store.listMaterials().find((entry) => entry.id === created.id);
+      expect(ready?.status).toBe('ready');
+
+      expect(ready?.topicCount).toBe(store.listTopics(created.id).length);
+      expect(ready?.pageCount).not.toBeNull();
+      expect(store.getPage(ready!.pageCount!)).not.toBeNull();
+      // One past the count it advertises must not exist.
+      expect(store.getPage(ready!.pageCount! + 1)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

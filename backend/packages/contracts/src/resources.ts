@@ -290,6 +290,11 @@ export const progressOverviewSchema = z.object({
   /** Ranked strongest → weakest. */
   masteryByTopic: z.array(topicMasterySchema),
   topFinding: misconceptionFindingSchema.nullable(),
+  /**
+   * How many findings are open, which `topFinding` alone cannot express — it is
+   * one finding, so a count derived from it can only ever read 0 or 1.
+   */
+  openFindingCount: z.number().int().min(0),
   plan: learningPlanSchema,
   trend: z.object({
     direction: trendDirectionSchema,

@@ -541,6 +541,7 @@ export function progressOverview(materialId: string): ProgressOverview {
     materialId,
     masteryByTopic,
     topFinding: ranked[0] ?? null,
+    openFindingCount: active.length,
     plan: state.plan,
     trend: computeTrend(state.responses),
     totals: {
@@ -680,8 +681,12 @@ export function advanceUploads(): void {
       } else {
         material.status = 'ready';
         material.processing = null;
-        material.pageCount = 24;
-        material.topicCount = 5;
+        // From the fixture the rest of the mock serves, not from a literal. These
+        // used to say 24 pages and 5 topics while `listTopics` returned 8 and
+        // `getPage` served up to 42 — the card and the study screen disagreed,
+        // and citations pointed past the page count the card claimed.
+        material.pageCount = SEED.material.pageCount;
+        material.topicCount = SEED.topics.length;
       }
       material.updatedAt = new Date().toISOString();
       state.uploads.delete(id);

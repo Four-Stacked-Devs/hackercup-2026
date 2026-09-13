@@ -57,14 +57,19 @@ export function PracticeRunner({ setId }: { setId: string }) {
 }
 
 function RunnerBody({ set }: { set: PracticeSet }) {
-  const [index, setIndex] = useState(() => Math.min(set.answeredCount, set.questions.length - 1));
+  const [index, setIndex] = useState(() =>
+    // `answeredCount` can equal the number of questions for a set that was
+    // answered through but never completed; clamping alone reopened the last
+    // question instead of leaving the runner at the end.
+    Math.max(0, Math.min(set.answeredCount, set.questions.length - 1)),
+  );
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<QuestionFeedback | null>(null);
   const [result, setResult] = useState<PracticeSetResult | null>(null);
   const startedAt = useRef(Date.now());
   const feedbackRef = useRef<HTMLDivElement | null>(null);
 
-  const submit = useSubmitResponse(set.id);
+  const submit = useSubmitResponse(set.id, set.materialId);
   const complete = useCompletePracticeSet(set.id, set.materialId);
 
   const question = set.questions[index]!;

@@ -55,7 +55,11 @@ export function ProgressView({
       <MasterySection overview={overview} compact={compact} />
 
       {overview.topFinding ? (
+        // Keyed by finding: the card holds its own "show the evidence" state, and
+        // reusing the instance swapped a different finding's answers in under an
+        // already-open disclosure.
         <FindingCard
+          key={overview.topFinding.id}
           finding={overview.topFinding}
           materialId={materialId}
           adaptation={overview.plan.lastAdaptation}
@@ -142,7 +146,9 @@ function StatRow({ overview, compact }: { overview: ProgressOverview; compact: b
       />
       <StatTile
         label="Open findings"
-        value={overview.topFinding ? 1 : 0}
+        // The real count from the API. Derived from `topFinding` this could only
+        // ever read 0 or 1, so a student with five open findings was told "1".
+        value={overview.openFindingCount}
         hint={overview.topFinding ? overview.topFinding.topicName : 'nothing repeating'}
       />
     </div>

@@ -28,6 +28,11 @@ const STROKE_TONE: Record<Tone, string> = {
   neutral: 'var(--neutral)',
 };
 
+/** Every meter in this file takes a 0..1 share; nothing draws outside it. */
+function clamp01(value: number): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+}
+
 export function ProgressBar({
   value,
   label,
@@ -40,7 +45,7 @@ export function ProgressBar({
   tone?: Tone;
   className?: string;
 }) {
-  const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
+  const pct = Math.round(clamp01(value) * 100);
 
   return (
     <div
@@ -143,7 +148,9 @@ export function TrendLine({
 
   const coords = points.map((point, index) => ({
     x: padLeft + index * step,
-    y: padY + (1 - point.accuracy) * (height - padY * 2),
+    // Clamped like ProgressBar and ProgressRing: an out-of-range accuracy should
+    // pin to the axis, not draw the line outside the viewBox.
+    y: padY + (1 - clamp01(point.accuracy)) * (height - padY * 2),
     point,
   }));
 
@@ -225,7 +232,7 @@ export function ProgressRing({
   const stroke = 10;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const filled = circumference * Math.min(1, Math.max(0, value));
+  const filled = circumference * clamp01(value);
 
   return (
     <svg

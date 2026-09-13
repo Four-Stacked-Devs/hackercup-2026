@@ -70,6 +70,10 @@ export const progressRoutes: FastifyPluginAsyncZod = async (app) => {
           toTopicMastery(m, topicNames.get(m.topicId) ?? 'Unknown topic'),
         ),
         topFinding: findings[0] ?? null,
+        // `listFindings` is scoped to ACTIVE, so this is the open count. It has to
+        // travel separately: `topFinding` is one finding, and a client counting
+        // from it can only ever say 0 or 1.
+        openFindingCount: findings.length,
         plan,
         trend: {
           direction: trend.direction,
