@@ -35,7 +35,7 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
       if (!material) throw errors.notFound('That material');
       if (material.status !== 'READY') throw errors.materialNotReady();
 
-      const { message, topicId, stream } = request.body;
+      const { message, topicId, conversationId, stream } = request.body;
       const llm = createLlmClient(request.log);
 
       // Classified before retrieval: a greeting has nothing to retrieve, and
@@ -59,6 +59,7 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
           content: message,
           citations: [],
           topicId: topicId ?? null,
+          conversationId: conversationId ?? null,
         },
       });
 
@@ -71,6 +72,7 @@ export const chatRoutes: FastifyPluginAsyncZod = async (app) => {
             content,
             citations,
             topicId: topicId ?? null,
+            conversationId: conversationId ?? null,
           },
         });
 

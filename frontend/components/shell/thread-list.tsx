@@ -16,11 +16,17 @@ interface ThreadListProps {
   /** Whether the untopiced thread (`/?thread=all`) is the one open. */
   ungroupedOpen: boolean;
   isPending: boolean;
+  /** The log actually came back — see `isSettled` in `useThreads`. */
+  isSettled?: boolean;
   /** The conversation log could not be loaded. */
   isError?: boolean;
   onRetry?: () => void;
   /** False when no material is selected, so there is nothing to have chats in. */
   hasMaterial?: boolean;
+  /** More of the log exists on the server than has been fetched. */
+  hasOlder?: boolean;
+  isFetchingOlder?: boolean;
+  onLoadOlder?: () => void;
 }
 
 /** Topic threads open by topic; conversations by their own key. */
@@ -33,9 +39,12 @@ function hrefFor(thread: ChatThread): string {
 /**
  * The conversation history in the rail.
  *
- * Threads are grouped by topic and headed by recency. The topic association is
- * recorded locally (see `lib/thread-index.ts`), so anything this browser did
- * not send appears in the ungrouped thread rather than being dropped.
+ * Threads are grouped by topic and headed by recency, from the threading the
+ * server records on each message — so the same chats appear in every browser.
+ *
+ * The log arrives newest-first in pages, so a long history is only partly here.
+ * That is stated and offered, rather than letting the oldest threads be absent
+ * with nothing to show they exist.
  */
 export function ThreadList({
   threads,
@@ -43,9 +52,13 @@ export function ThreadList({
   activeThreadKey = null,
   ungroupedOpen,
   isPending,
+  isSettled = true,
   isError = false,
   onRetry,
   hasMaterial = true,
+  hasOlder = false,
+  isFetchingOlder = false,
+  onLoadOlder,
 }: ThreadListProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -86,7 +99,11 @@ export function ThreadList({
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {isPending ? (
+        {/* An unreachable server reports neither loading nor error, so waiting
+            on `isSettled` is what stops "No conversations yet" — or "Add a PDF
+            to start your first conversation" — being said to someone whose
+            chats simply have not arrived. */}
+        {isPending || (!isSettled && !isError) ? (
           <ul className="space-y-1 px-2.5 py-1">
             {[0, 1, 2].map((row) => (
               <li key={row} className="h-8 animate-pulse rounded-md bg-nav-raised" />
@@ -145,6 +162,19 @@ export function ThreadList({
             </section>
           ))
         )}
+
+        {!isPending && !isError && hasOlder && onLoadOlder ? (
+          <div className="px-2.5 py-2">
+            <button
+              type="button"
+              onClick={onLoadOlder}
+              disabled={isFetchingOlder}
+              className="rounded-sm text-xs font-semibold text-lime underline-offset-2 hover:underline disabled:opacity-60"
+            >
+              {isFetchingOlder ? 'Loading earlier chats…' : 'Show earlier chats'}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

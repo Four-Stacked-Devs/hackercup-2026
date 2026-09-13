@@ -116,11 +116,28 @@ export function getMaterialPage(
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
 
+/**
+ * One page of the log, oldest-first, ending at `before` when given.
+ *
+ * The endpoint has always been paginated — it takes the newest `limit` messages
+ * and reverses them — and sending neither parameter simply accepted the server's
+ * default of 50. That silently truncated long histories, and since the sidebar
+ * builds its whole thread list from this array, the oldest threads disappeared
+ * from it with nothing to say they had.
+ */
 export function listChatMessages(
   materialId: string,
+  options: { limit?: number; before?: string } = {},
   signal?: AbortSignal,
 ): Promise<ChatMessage[]> {
-  return apiRequest(ROUTES.chat.messages(materialId), {
+  const query = new URLSearchParams();
+  if (options.limit !== undefined) query.set('limit', String(options.limit));
+  if (options.before !== undefined) query.set('before', options.before);
+
+  const path = ROUTES.chat.messages(materialId);
+  const search = query.toString();
+
+  return apiRequest(search ? `${path}?${search}` : path, {
     schema: z.array(chatMessageSchema),
     signal,
   });

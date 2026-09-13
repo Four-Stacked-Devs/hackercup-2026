@@ -189,7 +189,22 @@ export const handlers = [
     ROUTES.chat.messages(':id'),
     handler(
       { code: 'INTERNAL_ERROR', message: "The conversation couldn't be loaded." },
-      () => ok(store.getChat()),
+      ({ request }) => {
+        // Mirrors the real endpoint: newest `limit`, optionally before a cursor,
+        // handed back oldest-first. Returning the whole log meant mock mode could
+        // not reproduce a truncated history at all.
+        const url = new URL(request.url);
+        const limitParam = Number(url.searchParams.get('limit'));
+        const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 50;
+        const before = url.searchParams.get('before');
+
+        const all = store.getChat();
+        const upTo = before
+          ? all.filter((message) => message.createdAt < before)
+          : all;
+
+        return ok(upTo.slice(-limit));
+      },
     ),
   ),
 
@@ -205,11 +220,19 @@ export const handlers = [
     const body = (await request.json()) as {
       message: string;
       topicId?: string;
+      conversationId?: string;
       stream?: boolean;
     };
 
     const materialId = String(params['id']);
     const now = new Date().toISOString();
+
+    // The API persists the thread on both turns; the mock has to as well, or
+    // mock mode silently exercises a grouping path live mode no longer uses.
+    const thread = {
+      topicId: body.topicId ?? null,
+      conversationId: body.conversationId ?? null,
+    };
 
     store.appendChatMessage({
       id: store.nextChatId(),
@@ -217,6 +240,7 @@ export const handlers = [
       content: body.message,
       citations: [],
       createdAt: now,
+      ...thread,
     });
 
     if (wantsError(request)) {
@@ -231,6 +255,7 @@ export const handlers = [
       content: answer.text,
       citations: answer.citations,
       createdAt: new Date().toISOString(),
+      ...thread,
     };
 
     if (body.stream === false) {

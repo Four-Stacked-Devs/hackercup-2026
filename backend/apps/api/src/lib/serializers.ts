@@ -266,5 +266,9 @@ export function toChatMessage(row: P.ChatMessage) {
     content: row.content,
     citations: (row.citations as Citation[]) ?? [],
     createdAt: iso(row.createdAt),
+    // The thread this turn belongs to. Dropping these was why the sidebar had to
+    // rebuild threads from the client's own localStorage.
+    topicId: row.topicId,
+    conversationId: row.conversationId,
   };
 }

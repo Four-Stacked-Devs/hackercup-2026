@@ -362,6 +362,16 @@ export const chatMessageSchema = z.object({
   content: z.string(),
   citations: z.array(citationSchema),
   createdAt: isoDateTime,
+  /**
+   * The thread this message belongs to, as the server recorded it.
+   *
+   * Both are nullable because messages written before these fields existed have
+   * neither. The client keeps a local index as a fallback for exactly those, but
+   * whenever a value is present here it wins — it is the same association on
+   * every browser, which a local index can never be.
+   */
+  topicId: z.string().nullable(),
+  conversationId: z.string().nullable(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 

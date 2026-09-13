@@ -23,6 +23,12 @@ export interface ChatStreamRequest {
   materialId: string;
   message: string;
   topicId?: string;
+  /**
+   * The thread this turn belongs to. Sent so the server records it on both
+   * messages — that is what lets the sidebar rebuild the same threads on another
+   * browser instead of guessing from local storage.
+   */
+  conversationId?: string;
   signal?: AbortSignal;
 }
 
@@ -31,7 +37,7 @@ export interface ChatStreamRequest {
  * body and framed by hand: `event: <name>\ndata: <json>\n\n`.
  */
 export async function streamChatMessage(
-  { materialId, message, topicId, signal }: ChatStreamRequest,
+  { materialId, message, topicId, conversationId, signal }: ChatStreamRequest,
   handlers: ChatStreamHandlers,
 ): Promise<void> {
   const headers = requestHeaders({
@@ -44,7 +50,7 @@ export async function streamChatMessage(
     const init: RequestInit = {
       method: 'POST',
       headers,
-      body: JSON.stringify({ message, topicId, stream: true }),
+      body: JSON.stringify({ message, topicId, conversationId, stream: true }),
     };
     if (signal) init.signal = signal;
 
@@ -129,7 +135,17 @@ function dispatch(frame: string, handlers: ChatStreamHandlers): void {
     }
     case 'done': {
       const parsed = sseDoneEventSchema.safeParse(payload);
-      if (parsed.success) handlers.onDone(parsed.data.message);
+      if (parsed.success) {
+        handlers.onDone(parsed.data.message);
+      } else {
+        // Dropping this left the UI holding a streamed answer that never
+        // settled: no refetch, no error, the question stuck on screen as though
+        // it had been saved. The turn did reach the server, so say so.
+        handlers.onError({
+          code: 'INTERNAL_ERROR',
+          message: 'EducLM got an unexpected answer from the server. Reload to see the reply.',
+        });
+      }
       return;
     }
     case 'error': {

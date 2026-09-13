@@ -41,6 +41,12 @@ export const deletedResponseSchema = z.object({ deleted: z.literal(true) });
 export const chatRequestSchema = z.object({
   message: z.string().min(1).max(4000),
   topicId: z.string().optional(),
+  /**
+   * The thread this turn belongs to, minted by the client when the student
+   * starts a new chat. Persisted on both turns so the sidebar can rebuild the
+   * same threads from the server on any browser.
+   */
+  conversationId: z.string().max(128).optional(),
   /** Defaults to true — SSE. Set false for a single JSON response. */
   stream: z.boolean().optional().default(true),
 });

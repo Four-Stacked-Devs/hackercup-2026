@@ -33,9 +33,12 @@ import { Greeting } from './greeting';
  * linkable and the back button behaves.
  */
 export function AgentWorkspace() {
-  const { material, materials, isLoading, error, refetch } = useCurrentMaterial();
+  const { material, materials, isSettled, error, refetch } = useCurrentMaterial();
 
-  if (isLoading) return <ScreenSkeleton variant="chat" />;
+  // "Hi, I'm EDU. What are we studying?" is a greeting for someone who has
+  // uploaded nothing. Shown because the list never arrived, it tells a student
+  // with a library that their work is gone.
+  if (!isSettled && !error) return <ScreenSkeleton variant="chat" />;
 
   if (error) {
     return (
@@ -129,13 +132,17 @@ function ConversationColumn({
 
   /** Stamps the in-flight message with its thread, then sends it. */
   const send = (message: string, topicId?: string) => {
-    pendingConversationRef.current =
+    const conversationId =
       activeTopicId || activeThreadKey === 'all'
         ? // An open topic thread, or the legacy untopiced log: append to it.
           null
         : (activeThreadKey ?? newConversationId());
 
-    stream.send(message, topicId);
+    pendingConversationRef.current = conversationId;
+
+    // The id goes to the server too, so both turns are threaded there and the
+    // sidebar reads the same grouping on any browser.
+    stream.send(message, topicId, conversationId ?? undefined);
   };
 
   const setTopic = (topicId: string | null) =>

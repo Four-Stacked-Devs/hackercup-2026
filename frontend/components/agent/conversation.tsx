@@ -74,6 +74,9 @@ export function Conversation({
             content: pendingQuestion,
             citations: [],
             createdAt: new Date().toISOString(),
+            // Not saved yet, so it belongs to no thread the server knows about.
+            topicId: null,
+            conversationId: null,
           }}
         />
       ) : null}

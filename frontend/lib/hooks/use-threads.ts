@@ -74,9 +74,20 @@ export function useThreads(materialId: string | null) {
      * them. `isLoading` is pending AND fetching, which is the real thing.
      */
     isPending: messages.isLoading || topics.isLoading,
+    /** The log came back. Only then is "no conversations yet" a fact. */
+    isSettled: messages.isSettled,
     isError: messages.isError,
     error: messages.error,
     refetch: () => void messages.refetch(),
+    /**
+     * The log arrives newest-first in pages, so a long history starts partly
+     * loaded and the threads built from it are partly complete. These let the
+     * rail say so and go back further, instead of the oldest threads simply not
+     * being there.
+     */
+    hasOlder: messages.hasOlder,
+    isFetchingOlder: messages.isFetchingOlder,
+    fetchOlder: () => void messages.fetchOlder(),
   };
 }
 

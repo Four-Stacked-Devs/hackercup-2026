@@ -90,9 +90,10 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { materialId } = useCurrentMaterial();
+  const { materialId, isSettled: librarySettled } = useCurrentMaterial();
   const { displayName } = usePreferences();
-  const { threads, isPending, isError, refetch } = useThreads(materialId);
+  const { threads, isPending, isSettled, isError, refetch, hasOlder, isFetchingOlder, fetchOlder } =
+    useThreads(materialId);
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -191,15 +192,25 @@ export function Sidebar() {
       {collapsed ? (
         <div className="min-h-0 flex-1" />
       ) : (
+        // Keyed by material: the list owns a search box, and carrying that term
+        // across a material change left the new material's threads silently
+        // filtered by what was typed for the old one.
         <ThreadList
+          key={materialId ?? 'none'}
           threads={threads}
           activeTopicId={activeTopicId}
           activeThreadKey={activeThreadKey}
           ungroupedOpen={ungroupedOpen}
           isPending={isPending}
+          // Both halves have to be known: with no library yet, "add a PDF to
+          // start your first conversation" is as much a claim as "no chats".
+          isSettled={librarySettled && (materialId === null || isSettled)}
           isError={isError}
           onRetry={refetch}
           hasMaterial={materialId !== null}
+          hasOlder={hasOlder}
+          isFetchingOlder={isFetchingOlder}
+          onLoadOlder={fetchOlder}
         />
       )}
 

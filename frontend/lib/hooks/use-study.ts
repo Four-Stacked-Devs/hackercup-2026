@@ -1,7 +1,13 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import type { ChatMessage, Citation } from '@educlm/contracts';
 import {
   clearChat,
@@ -12,6 +18,7 @@ import {
 } from '../api/endpoints';
 import { streamChatMessage } from '../api/chat-stream';
 import { queryKeys } from '../query-keys';
+import { forgetMaterial } from '../thread-index';
 
 export function useTopics(materialId: string | null) {
   return useQuery({
@@ -38,12 +45,55 @@ export function useMaterialPage(materialId: string | null, page: number | null) 
   });
 }
 
+/** What the API returns per request when we do not ask for something else. */
+const CHAT_PAGE_SIZE = 50;
+
+/**
+ * The material's log, oldest-first, in pages.
+ *
+ * Paginated rather than capped: the endpoint returns the newest `limit`
+ * messages, so a single request quietly dropped everything older — and the
+ * sidebar derives every thread from this array, so those threads vanished with
+ * it. `before` walks backwards from the oldest message already held.
+ *
+ * `data` stays a flat `ChatMessage[]` so callers read it the way they always
+ * have; `fetchOlder` and `hasOlder` are there for the ones that need more.
+ */
 export function useChatMessages(materialId: string | null) {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: queryKeys.chat(materialId ?? 'none'),
-    queryFn: ({ signal }) => listChatMessages(materialId as string, signal),
+    queryFn: ({ pageParam, signal }) =>
+      listChatMessages(
+        materialId as string,
+        { limit: CHAT_PAGE_SIZE, ...(pageParam ? { before: pageParam } : {}) },
+        signal,
+      ),
+    initialPageParam: null as string | null,
+    // A short page means the log is exhausted. Otherwise continue from the
+    // oldest message in it — `before` is exclusive, so nothing repeats.
+    getNextPageParam: (lastPage: ChatMessage[]) =>
+      lastPage.length < CHAT_PAGE_SIZE ? undefined : (lastPage[0]?.createdAt ?? undefined),
     enabled: Boolean(materialId),
   });
+
+  // Page 0 is the newest block, each block already oldest-first — so the pages
+  // read newest-block-first and have to be reversed to make one ordered log.
+  const data = useMemo(
+    () => (query.data?.pages ?? []).slice().reverse().flat(),
+    [query.data],
+  );
+
+  return {
+    data,
+    isLoading: query.isLoading,
+    isSettled: query.isSuccess,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
+    fetchOlder: query.fetchNextPage,
+    hasOlder: query.hasNextPage,
+    isFetchingOlder: query.isFetchingNextPage,
+  };
 }
 
 export function useClearChat(materialId: string) {
@@ -52,7 +102,16 @@ export function useClearChat(materialId: string) {
   return useMutation({
     mutationFn: () => clearChat(materialId),
     onSuccess: () => {
-      queryClient.setQueryData<ChatMessage[]>(queryKeys.chat(materialId), []);
+      // An infinite query's cache entry is `{ pages, pageParams }` — writing a
+      // bare array here would leave the hook reading `undefined.pages`.
+      queryClient.setQueryData<InfiniteData<ChatMessage[], string | null>>(
+        queryKeys.chat(materialId),
+        { pages: [[]], pageParams: [null] },
+      );
+      // The index maps message ids that no longer exist. Left behind it only
+      // grows, and it is the fallback grouping for pre-migration messages — so it
+      // has to go when the messages do.
+      forgetMaterial(materialId);
     },
   });
 }
@@ -86,7 +145,7 @@ export function useChatStream(materialId: string | null, options: ChatStreamOpti
   const [error, setError] = useState<string | null>(null);
 
   const send = useCallback(
-    (message: string, topicId?: string) => {
+    (message: string, topicId?: string, conversationId?: string) => {
       if (!materialId || !message.trim()) return;
 
       abortRef.current?.abort();
@@ -98,7 +157,13 @@ export function useChatStream(materialId: string | null, options: ChatStreamOpti
       setAnswer({ content: '', citations: [] });
 
       void streamChatMessage(
-        { materialId, message, ...(topicId ? { topicId } : {}), signal: controller.signal },
+        {
+          materialId,
+          message,
+          ...(topicId ? { topicId } : {}),
+          ...(conversationId ? { conversationId } : {}),
+          signal: controller.signal,
+        },
         {
           onToken: (text) =>
             setAnswer((current) => ({
@@ -123,6 +188,13 @@ export function useChatStream(materialId: string | null, options: ChatStreamOpti
           onError: (streamError) => {
             setError(streamError.message);
             setAnswer(null);
+
+            // The server writes the question before it starts answering, so a
+            // failed stream still left a turn in the log. Clearing the optimistic
+            // copy and refetching shows what was actually saved, instead of a
+            // question rendered as though it had gone through cleanly.
+            setPendingQuestion(null);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.chat(materialId) });
           },
         },
       );

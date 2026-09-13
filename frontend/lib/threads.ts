@@ -3,17 +3,19 @@ import type { ChatMessage, Topic } from '@educlm/contracts';
 /**
  * Chat threads.
  *
- * The API keeps ONE conversation per material and does not return `topicId` on
- * a message (`chatMessageSchema` is id/role/content/citations/createdAt), so a
- * thread cannot be reconstructed from the server alone. What the client does
- * know is the topic it sent each message under; that is recorded locally by
- * `lib/thread-index.ts` and passed in here as `topicOf`.
+ * A message carries its own `topicId` and `conversationId` from the API, so
+ * threads are the server's answer, not a guess: they look the same in every
+ * browser and survive cleared storage.
+ *
+ * The local index in `lib/thread-index.ts` is still passed in, but only as a
+ * fallback for messages written before the server recorded threading. A value on
+ * the message always wins over the local one.
  *
  * Everything in this file is pure: same inputs, same threads, no clock, no
  * storage, no fetch. The clock arrives as `now`.
  *
- * A message with no recorded topic is never hidden — it falls into the
- * `null` thread, titled after its first user message.
+ * A message with no thread at all is never hidden — it falls into the ungrouped
+ * thread, titled after its first user message.
  */
 
 /** The label for a thread that has no topic and no user message to name it. */
@@ -75,16 +77,17 @@ const UNGROUPED_KEY = '__ungrouped__';
  * Splits a material's message log into threads.
  *
  * Precedence is conversation, then topic, then the ungrouped remainder:
- *  - a message recorded under a conversation is its own thread, so every
- *    "New Chat" stays separate instead of merging into one pile;
- *  - a message recorded only under a topic keeps the topic thread it had;
- *  - anything unrecorded — sent before this index existed, or from another
- *    browser — falls into the single ungrouped thread rather than vanishing.
+ *  - a message in a conversation is its own thread, so every "New Chat" stays
+ *    separate instead of merging into one pile;
+ *  - a message with only a topic keeps the topic thread it had;
+ *  - anything with neither — written before the server recorded threading, with
+ *    no local record either — falls into the single ungrouped thread rather than
+ *    vanishing.
  *
  * @param messages        the material's full log, any order
- * @param topicOf         message id -> topic id, from the local index
+ * @param topicOf         message id -> topic id, local fallback only
  * @param topics          the material's topics, for real names
- * @param conversationOf  message id -> conversation id, from the local index
+ * @param conversationOf  message id -> conversation id, local fallback only
  */
 export function buildThreads(
   messages: ChatMessage[],
@@ -96,8 +99,17 @@ export function buildThreads(
   const buckets = new Map<string, ChatMessage[]>();
 
   const ordered = [...messages].sort(byCreatedAtAscending);
-  const resolvedTopic = withAdjacentQuestions(ordered, topicOf);
-  const resolvedConversation = withAdjacentQuestions(ordered, conversationOf);
+
+  // The server's own threading first; the local index only fills the gaps it
+  // leaves, which are the messages written before the API carried these fields.
+  const resolvedTopic = withAdjacentQuestions(
+    ordered,
+    preferServer(ordered, topicOf, (message) => message.topicId),
+  );
+  const resolvedConversation = withAdjacentQuestions(
+    ordered,
+    preferServer(ordered, conversationOf, (message) => message.conversationId),
+  );
 
   for (const message of ordered) {
     const conversationId = resolvedConversation[message.id];
@@ -138,6 +150,26 @@ export function buildThreads(
 
   // Most recently active first, which is also the order the buckets read in.
   return threads.sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
+}
+
+/**
+ * Overlays what the server said onto the local index. Local entries survive only
+ * for messages the server has no value for, so a stale local record can never
+ * contradict the server.
+ */
+function preferServer(
+  ordered: readonly ChatMessage[],
+  local: Readonly<Record<string, string>>,
+  read: (message: ChatMessage) => string | null,
+): Record<string, string> {
+  const resolved: Record<string, string> = { ...local };
+
+  for (const message of ordered) {
+    const fromServer = read(message);
+    if (fromServer) resolved[message.id] = fromServer;
+  }
+
+  return resolved;
 }
 
 /** Mirrors the `conv-` prefix minted by `lib/thread-index.ts`. */
@@ -213,12 +245,13 @@ export function findThread(
 }
 
 /**
- * Only the assistant's message id comes back from the stream, so the question
- * that prompted it is never recorded directly. The log is strictly ordered
- * question-then-answer, so a user message immediately followed by an answer
- * with a known topic belongs to that same thread.
+ * Fills in a question whose own thread is unknown from the answer that follows
+ * it. Only reachable for messages the server did not thread — it recorded both
+ * turns — so this now covers the pre-migration log alone.
  *
- * This reads adjacency, not content — it cannot invent an association that the
+ * The log is strictly ordered question-then-answer, so a user message
+ * immediately followed by a threaded answer belongs to that same thread. This
+ * reads adjacency, not content: it cannot invent an association that the
  * ordering does not already show.
  */
 function withAdjacentQuestions(
