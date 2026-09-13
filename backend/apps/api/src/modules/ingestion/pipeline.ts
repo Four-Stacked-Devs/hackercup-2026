@@ -5,7 +5,7 @@ import { getEmbedder, toVectorLiteral } from '../../lib/embeddings.js';
 import { ApiException } from '../../lib/errors.js';
 import { createLlmClient, type LlmLogger } from '../../lib/llm.js';
 import { extractPdf } from '../../lib/pdf.js';
-import { getFile } from '../../lib/storage.js';
+import { fileExists, getFile } from '../../lib/storage.js';
 import { chunkPages } from './chunk.js';
 import { writeDraftLessons } from './lesson-writer.js';
 import { extractCourseMap, slugify, type TopicDraft } from './topics.js';
@@ -113,6 +113,15 @@ export async function runIngestion(
 
     // ── 1. extracting ────────────────────────────────────────────────────────
     const pages = await timer.time('extract', async () => {
+      // Uploads live on the instance's disk, which a free host wipes on every
+      // restart. Resuming an upload the restart interrupted then found no file
+      // and failed as "Something went wrong" — say what actually happened.
+      if (!fileExists(material.storageKey)) {
+        throw new ApiException(
+          'INTERNAL_ERROR',
+          'The server restarted before this file was ready, and the upload was lost with it. Please upload it again.',
+        );
+      }
       const extracted = await extractPdf(await getFile(material.storageKey));
 
       await db().pageText.deleteMany({ where: { materialId } });
