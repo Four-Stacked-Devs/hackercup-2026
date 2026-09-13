@@ -212,6 +212,8 @@ export function planTopicRows(
     summary: topic.summary,
     orderIndex,
     sourcePages: topic.sourcePages,
+    objectives: topic.objectives,
+    keyTerms: topic.keyTerms,
     prerequisiteTopicIds: [
       ...new Set(
         topic.prerequisiteSlugs
@@ -317,6 +319,8 @@ async function copyMaterial(fromId: string, toId: string): Promise<void> {
       summary: topic.summary,
       orderIndex: topic.orderIndex,
       sourcePages: topic.sourcePages,
+      objectives: topic.objectives,
+      keyTerms: topic.keyTerms,
       prerequisiteTopicIds: topic.prerequisiteTopicIds.flatMap((id) => newId.get(id) ?? []),
       lessonStatus: copiedStatus(topic.lessonStatus),
     })),

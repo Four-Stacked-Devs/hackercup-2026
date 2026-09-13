@@ -109,6 +109,90 @@ function sourcePagesFor(topic: SeedTopic): number[] {
   );
 }
 
+// ── Topic template (mirrors the API's topic-template.ts fallback) ────────────
+
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'that', 'this', 'with', 'from', 'they', 'have', 'will',
+  'would', 'there', 'their', 'what', 'when', 'which', 'been', 'were', 'these',
+  'those', 'then', 'than', 'into', 'each', 'because', 'about', 'while', 'where',
+  'your', 'value', 'name', 'same', 'means', 'writing', 'gives', 'point',
+]);
+
+/**
+ * Outcomes and key terms for a fixture topic, derived from its own text the
+ * way the API fills a topic the model said nothing usable about — so mock mode
+ * renders the same plan template as live mode.
+ */
+function templateFor(topic: SeedTopic): { objectives: string[]; keyTerms: string[] } {
+  const counts = new Map<string, number>();
+  for (const page of topic.pages) {
+    for (const word of page.body.match(/\b[A-Za-z][A-Za-z_]{2,20}\b/g) ?? []) {
+      if (STOPWORDS.has(word.toLowerCase()) || word.length < 3) continue;
+      counts.set(word, (counts.get(word) ?? 0) + 1);
+    }
+  }
+  const keyTerms = [...counts.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .map(([word]) => word)
+    .slice(0, 4);
+
+  const about = topic.summary.replace(/[.]+$/, '');
+  const objectives = [
+    `Explain ${about.charAt(0).toLowerCase()}${about.slice(1)}`,
+    `Recognise ${keyTerms.slice(0, 2).join(' and ')} in a short code example`,
+  ];
+
+  return { objectives, keyTerms };
+}
+
+const TEMPLATE = new Map(SEED.topics.map((topic) => [topic.id, templateFor(topic)]));
+
+const KIND_ORDER: Record<PlanStep['kind'], number> = { read: 0, practice: 1, review: 2, advance: 3 };
+
+/** The API groups plan steps into modules server-side; the mock does the same. */
+function withModules(plan: Omit<LearningPlan, 'modules'>): LearningPlan {
+  const modules = SEED.topics.flatMap((topic) => {
+    const steps = plan.steps
+      .filter((step) => step.topicId === topic.id)
+      .sort((a, b) =>
+        a.insertedByAdaptation !== b.insertedByAdaptation
+          ? a.insertedByAdaptation
+            ? 1
+            : -1
+          : KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.orderIndex - b.orderIndex,
+      );
+    if (steps.length === 0) return [];
+
+    const outstanding = steps.filter((step) => step.status !== 'skipped');
+    const completed = outstanding.filter((step) => step.status === 'completed').length;
+
+    return [
+      {
+        topicId: topic.id,
+        topicName: topic.name,
+        summary: topic.summary,
+        sourcePages: sourcePagesFor(topic),
+        ...TEMPLATE.get(topic.id)!,
+        lessonStatus: 'ready' as const,
+        stepIds: steps.map((step) => step.id),
+        estimatedMinutes: outstanding
+          .filter((step) => step.status !== 'completed')
+          .reduce((total, step) => total + step.estimatedMinutes, 0),
+        completedSteps: completed,
+        totalSteps: outstanding.length,
+        status:
+          outstanding.length > 0 && completed === outstanding.length
+            ? ('completed' as const)
+            : completed > 0 || steps.some((step) => step.status === 'active')
+              ? ('in_progress' as const)
+              : ('pending' as const),
+      },
+    ];
+  });
+
+  return { ...plan, modules };
+}
+
 export function citationForPage(page: number): Citation {
   const content = pageText[page];
   const body = content?.body ?? '';
@@ -340,7 +424,7 @@ function seededPlan(): LearningPlan {
     },
   );
 
-  return {
+  return withModules({
     id: 'plan_demo_js',
     materialId: MATERIAL_ID,
     steps: steps.map((step, orderIndex) => ({ ...step, orderIndex })),
@@ -352,7 +436,7 @@ function seededPlan(): LearningPlan {
       previousStepTitle: 'Read: Loops',
       newStepTitle: 'Review: Conditionals',
     },
-  };
+  });
 }
 
 function initialState(): MockState {
@@ -472,6 +556,7 @@ export function listTopics(materialId: string): Topic[] {
     prerequisiteTopicIds: topic.prerequisiteSlugs
       .map((slug) => SEED.topics.find((candidate) => candidate.slug === slug)?.id)
       .filter((id): id is string => Boolean(id)),
+    ...TEMPLATE.get(topic.id)!,
     lessonStatus: 'ready',
     questionCount: SEED.questions.filter((question) => question.topicId === topic.id).length,
     mastery: topicMasteryFor(topic.id),
@@ -1014,7 +1099,7 @@ function adaptPlan(): boolean {
   const steps = [...state.plan.steps];
   steps.splice(insertAt === -1 ? steps.length : insertAt, 0, review, practice);
 
-  state.plan = {
+  state.plan = withModules({
     ...state.plan,
     steps: steps.map((step, orderIndex) => ({ ...step, orderIndex })),
     currentStepId: review.id,
@@ -1025,7 +1110,7 @@ function adaptPlan(): boolean {
       previousStepTitle,
       newStepTitle: review.title,
     },
-  };
+  });
 
   return true;
 }
@@ -1043,11 +1128,11 @@ function setStepStatus(stepId: string, status: PlanStep['status']): LearningPlan
   const nextPending = steps.find((step) => step.status === 'pending');
   if (nextPending) nextPending.status = 'active';
 
-  state.plan = {
+  state.plan = withModules({
     ...state.plan,
     steps,
     currentStepId: nextPending?.id ?? null,
-  };
+  });
 
   return state.plan;
 }
@@ -1071,12 +1156,12 @@ export function revertAdaptation(): LearningPlan {
   );
   if (nextPending) nextPending.status = 'active';
 
-  state.plan = {
+  state.plan = withModules({
     ...state.plan,
     steps: steps.map((step, orderIndex) => ({ ...step, orderIndex })),
     currentStepId: nextPending?.id ?? null,
     lastAdaptation: null,
-  };
+  });
 
   return state.plan;
 }

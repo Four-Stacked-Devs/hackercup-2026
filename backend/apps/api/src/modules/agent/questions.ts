@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Difficulty, OptionLabel } from '@educlm/contracts';
 import type { LlmBudget, LlmClient } from '../../lib/llm.js';
+import { collectTerms } from '../ingestion/terms.js';
 import type { VocabularyEntry } from '../ingestion/vocabulary.js';
 import type { RetrievedChunk } from './retrieval.js';
 
@@ -348,11 +349,6 @@ ${blocks}`,
 
 // ─── Deterministic fallback ──────────────────────────────────────────────────
 
-const STOPWORDS = new Set([
-  'the', 'and', 'for', 'that', 'this', 'with', 'from', 'they', 'have', 'will',
-  'would', 'there', 'their', 'what', 'when', 'which', 'been', 'were', 'these',
-  'those', 'then', 'than', 'into', 'each', 'because', 'about', 'while', 'where',
-]);
 
 /**
  * Cloze ("fill the blank") questions built straight from the source sentences.
@@ -430,23 +426,6 @@ function orderTags(vocabulary: VocabularyEntry[], emphasiseTag?: string): string
   return [emphasiseTag, ...tags.filter((t) => t !== emphasiseTag)];
 }
 
-/** Distinctive multi-character words, most frequent first. */
-function collectTerms(chunks: RetrievedChunk[]): string[] {
-  const counts = new Map<string, number>();
-
-  for (const chunk of chunks) {
-    for (const word of chunk.content.match(/\b[A-Za-z][A-Za-z_]{3,20}\b/g) ?? []) {
-      const key = word.toLowerCase();
-      if (STOPWORDS.has(key)) continue;
-      counts.set(word, (counts.get(word) ?? 0) + 1);
-    }
-  }
-
-  return [...counts.entries()]
-    .sort(([, a], [, b]) => b - a)
-    .map(([word]) => word)
-    .slice(0, 40);
-}
 
 function pickKeyTerm(sentence: string, terms: string[]): string | null {
   for (const term of terms) {

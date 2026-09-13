@@ -7,7 +7,7 @@ import {
   questionOutputTokens,
 } from '../../src/modules/agent/questions.js';
 import type { JsonRequest, LlmClient } from '../../src/lib/llm.js';
-import { estimateReadMinutes } from '../../src/modules/agent/plan-guidance.js';
+import { estimateReadMinutes } from '../../src/modules/plan/reading-time.js';
 
 describe('pickAnswerPositions', () => {
   it('uses every label once in each run of four', () => {

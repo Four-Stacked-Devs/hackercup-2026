@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { LlmClient } from '../../lib/llm.js';
 import type { ChunkDraft } from './chunk.js';
+import { buildTopicTemplate, tidyTopicName } from './topic-template.js';
 import { GENERIC_VOCABULARY, normaliseVocabulary, type VocabularyEntry } from './vocabulary.js';
 
 /**
@@ -22,6 +23,9 @@ export interface TopicDraft {
   summary: string;
   sourcePages: number[];
   prerequisiteSlugs: string[];
+  /** 2-3 verb-first outcomes and 3-6 key terms; see topic-template.ts. */
+  objectives: string[];
+  keyTerms: string[];
 }
 
 const MAX_TOPICS = 12;
@@ -37,6 +41,8 @@ const llmTopicSchema = z.object({
         // Required, not defaulted: Groq's strict JSON mode rejects any schema
         // whose properties are not all required. The prompt asks for [] instead.
         prerequisiteSlugs: z.array(z.string()),
+        objectives: z.array(z.string()),
+        keyTerms: z.array(z.string()),
       }),
     )
     .min(MIN_TOPICS)
@@ -107,13 +113,23 @@ export function segmentTopicsByHeading(chunks: ChunkDraft[]): TopicDraft[] {
     }).filter(([, g]) => g.pages.size > 0);
   }
 
-  const drafts = entries.slice(0, MAX_TOPICS).map(([name, group]) => ({
-    name,
-    slug: slugify(name),
-    summary: buildExtractiveSummary(group.text),
-    sourcePages: [...group.pages].sort((a, b) => a - b),
-    prerequisiteSlugs: [],
-  }));
+  const drafts = entries.slice(0, MAX_TOPICS).map(([heading, group]) => {
+    const name = tidyTopicName(heading);
+    const summary = buildExtractiveSummary(group.text);
+    return {
+      name,
+      slug: slugify(name),
+      summary,
+      sourcePages: [...group.pages].sort((a, b) => a - b),
+      prerequisiteSlugs: [],
+      // Templated from the topic's own text: a module built without the model
+      // still shows outcomes and key terms rather than two empty sections.
+      ...buildTopicTemplate({
+        name,
+        passages: group.text.map((content) => ({ content })),
+      }),
+    };
+  });
 
   return dedupeSlugs(drafts);
 }
@@ -184,6 +200,12 @@ Rules:
 - prerequisiteSlugs: other topics in your list that must be understood first,
   written as the lowercase_underscore form of their exact name. Use [] when
   none.
+- objectives: exactly 2 or 3 things the student will be able to DO after this
+  topic. Start each with a verb ("Explain how...", "Write a query that...",
+  "Tell apart..."), keep each under 15 words, and make them checkable — not
+  "Understand the topic".
+- keyTerms: 3 to 6 terms this topic introduces, spelled as the material spells
+  them. Terms only, no definitions and no sentences.
 - Aim for 3 to 10 topics. Prefer fewer, meaningful topics over many tiny ones;
   a short deck may only need 2 to 4.
 - Keep the subject at the material's own level. Simplify the language, not the
@@ -228,14 +250,27 @@ export async function extractCourseMap(
     }),
   });
 
-  const drafts = value.topics.map((topic) => ({
-    name: topic.name,
-    slug: slugify(topic.name),
-    summary: topic.summary,
-    // Drop hallucinated page numbers rather than trusting them.
-    sourcePages: topic.sourcePages.filter((p) => validPages.has(p)),
-    prerequisiteSlugs: topic.prerequisiteSlugs ?? [],
-  }));
+  const drafts = value.topics.map((topic) => {
+    const sourcePages = topic.sourcePages.filter((p) => validPages.has(p));
+    const pages = new Set(sourcePages);
+
+    const name = tidyTopicName(topic.name);
+
+    return {
+      name,
+      slug: slugify(name),
+      summary: topic.summary,
+      // Drop hallucinated page numbers rather than trusting them.
+      sourcePages,
+      prerequisiteSlugs: topic.prerequisiteSlugs ?? [],
+      ...buildTopicTemplate({
+        name,
+        objectives: topic.objectives,
+        keyTerms: topic.keyTerms,
+        passages: chunks.filter((chunk) => pages.has(chunk.page)),
+      }),
+    };
+  });
 
   // A topic whose every page was invented is not grounded — discard it.
   const grounded = drafts.filter((t) => t.sourcePages.length > 0);
@@ -255,5 +290,7 @@ function stripSlug(topic: TopicDraft) {
     summary: topic.summary,
     sourcePages: topic.sourcePages,
     prerequisiteSlugs: topic.prerequisiteSlugs,
+    objectives: topic.objectives,
+    keyTerms: topic.keyTerms,
   };
 }

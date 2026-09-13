@@ -1,9 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { LearningPlan } from '@educlm/contracts';
 import { db } from '../db/client.js';
-import { createLlmClient } from '../lib/llm.js';
 import { toLearningPlan } from '../lib/serializers.js';
-import { buildPlanGuidance, estimateReadMinutes } from '../modules/agent/plan-guidance.js';
+import { estimateReadMinutes } from '../modules/plan/reading-time.js';
+import {
+  practiceStepDescription,
+  practiceStepTitle,
+  readStepDescription,
+  readStepTitle,
+} from '../modules/plan/template.js';
 import {
   adaptPlan,
   computeMasteryByTopic,
@@ -17,7 +22,9 @@ import type {
   PlanStep as PlanStepRow,
   PlanStepKind,
   PlanStepStatus,
+  Topic as TopicRow,
 } from '../generated/prisma/client.js';
+import { buildTopicTemplate } from '../modules/ingestion/topic-template.js';
 
 /**
  * Learning plan persistence and adaptation.
@@ -52,20 +59,17 @@ function toStepInput(row: PlanStepRow): PlanStepInput {
  * promise makes the second wait for the first instead. In process, like the
  * job queues.
  */
+/** Questions a practice step asks for; matches the client's `count`. */
+const PRACTICE_SET_SIZE = 5;
+
 const building = new Map<string, ReturnType<typeof buildPlanIfMissing>>();
 
-export function ensurePlan(
-  userId: string,
-  materialId: string,
-  options: { background?: boolean } = {},
-) {
+export function ensurePlan(userId: string, materialId: string) {
   const key = `${userId}:${materialId}`;
   const inFlight = building.get(key);
   if (inFlight) return inFlight;
 
-  const build = buildPlanIfMissing(userId, materialId, options.background ?? false).finally(() =>
-    building.delete(key),
-  );
+  const build = buildPlanIfMissing(userId, materialId).finally(() => building.delete(key));
   building.set(key, build);
   return build;
 }
@@ -80,7 +84,7 @@ export function ensurePlan(
  * Backfilling is safe to repeat: steps are only ever created for a plan that has
  * none.
  */
-async function buildPlanIfMissing(userId: string, materialId: string, background: boolean) {
+async function buildPlanIfMissing(userId: string, materialId: string) {
   const existing = await db().learningPlan.findUnique({
     where: { userId_materialId: { userId, materialId } },
     include: { steps: true },
@@ -100,16 +104,6 @@ async function buildPlanIfMissing(userId: string, materialId: string, background
   // Still nothing to plan against. Leave the row as it is rather than writing an
   // empty plan we would have to recognise and repair later.
   if (existing && topics.length === 0) return existing;
-
-  // Guidance comes from a model call, so it is fetched before the plan row is
-  // re-read below: a concurrent request may have built the steps meanwhile.
-  const guidance = await buildPlanGuidance({
-    materialTitle: material?.title ?? 'Study material',
-    topics,
-    // The prebuild after upload is background work and must not hold up a
-    // student's first question; a student opening the plan is not.
-    llm: createLlmClient(undefined, { background }),
-  });
 
   const lessons = await db().lessonSection.findMany({
     where: { topicId: { in: topics.map((t) => t.id) } },
@@ -136,39 +130,36 @@ async function buildPlanIfMissing(userId: string, materialId: string, background
   // One insert for every step: created one by one, a ten-topic plan was twenty
   // sequential round trips. Ids are minted here so the first step is known
   // without reading the rows back.
-  const steps = topics.flatMap((topic, index) => {
-    const guide = guidance.get(topic.id);
-    return [
-      {
-        id: randomUUID(),
-        planId: plan.id,
-        kind: 'READ' as const,
-        title: `Read: ${topic.name}`,
-        description: guide?.readFocus ?? topic.summary,
-        topicId: topic.id,
-        targetType: 'lesson',
-        targetId: topic.id,
-        estimatedMinutes: estimateReadMinutes(
-          lessonText.get(topic.id) ?? '',
-          topic.sourcePages.length,
-        ),
-        status: index === 0 ? ('ACTIVE' as const) : ('PENDING' as const),
-        orderIndex: index * 2,
-      },
-      {
-        id: randomUUID(),
-        planId: plan.id,
-        kind: 'PRACTICE' as const,
-        title: `Practise: ${topic.name}`,
-        description: guide?.practiceGoal ?? `A short set of questions on ${topic.name}.`,
-        topicId: topic.id,
-        targetType: 'practice_set',
-        estimatedMinutes: 6,
-        status: 'PENDING' as const,
-        orderIndex: index * 2 + 1,
-      },
-    ];
-  });
+  const steps = topics.flatMap((topic, index) => [
+    {
+      id: randomUUID(),
+      planId: plan.id,
+      kind: 'READ' as const,
+      title: readStepTitle(topic),
+      description: readStepDescription(topic),
+      topicId: topic.id,
+      targetType: 'lesson',
+      targetId: topic.id,
+      estimatedMinutes: estimateReadMinutes(
+        lessonText.get(topic.id) ?? '',
+        topic.sourcePages.length,
+      ),
+      status: index === 0 ? ('ACTIVE' as const) : ('PENDING' as const),
+      orderIndex: index * 2,
+    },
+    {
+      id: randomUUID(),
+      planId: plan.id,
+      kind: 'PRACTICE' as const,
+      title: practiceStepTitle(topic),
+      description: practiceStepDescription(topic, PRACTICE_SET_SIZE),
+      topicId: topic.id,
+      targetType: 'practice_set',
+      estimatedMinutes: 6,
+      status: 'PENDING' as const,
+      orderIndex: index * 2 + 1,
+    },
+  ]);
 
   if (steps.length > 0) {
     await db().planStep.createMany({ data: steps });
@@ -186,11 +177,56 @@ async function buildPlanIfMissing(userId: string, materialId: string, background
 
 export async function getPlan(userId: string, materialId: string): Promise<LearningPlan> {
   const plan = await ensurePlan(userId, materialId);
-  const steps = await db().planStep.findMany({
-    where: { planId: plan.id },
-    orderBy: { orderIndex: 'asc' },
+  const [steps, topics] = await Promise.all([
+    db().planStep.findMany({ where: { planId: plan.id }, orderBy: { orderIndex: 'asc' } }),
+    db().topic.findMany({ where: { materialId }, orderBy: { orderIndex: 'asc' } }),
+  ]);
+  return toLearningPlan(plan, steps, await backfillTopicTemplates(materialId, topics));
+}
+
+/**
+ * Give topics prepared before they carried outcomes and key terms their
+ * template, from their own passages — no model call — the first time their plan
+ * is read. Without it every older material rendered its modules half empty.
+ * One batched write, and only for topics that still need it.
+ */
+async function backfillTopicTemplates(materialId: string, topics: TopicRow[]): Promise<TopicRow[]> {
+  const bare = topics.filter((topic) => topic.objectives.length === 0);
+  if (bare.length === 0) return topics;
+
+  const chunks = await db().chunk.findMany({
+    where: { materialId },
+    select: { page: true, content: true },
   });
-  return toLearningPlan(plan, steps);
+
+  const filled = new Map(
+    bare.map((topic) => {
+      const pages = new Set(topic.sourcePages);
+      return [
+        topic.id,
+        buildTopicTemplate({
+          name: topic.name,
+          keyTerms: topic.keyTerms,
+          passages: chunks.filter((chunk) => pages.has(chunk.page)),
+        }),
+      ] as const;
+    }),
+  );
+
+  const values = bare.map((_, i) => `($${i * 3 + 1}::text, $${i * 3 + 2}::text, $${i * 3 + 3}::text)`);
+  await db().$executeRawUnsafe(
+    `UPDATE "Topic" AS t
+       SET objectives = ARRAY(SELECT jsonb_array_elements_text(v.objectives::jsonb)),
+           "keyTerms" = ARRAY(SELECT jsonb_array_elements_text(v.terms::jsonb))
+      FROM (VALUES ${values.join(', ')}) AS v(id, objectives, terms)
+     WHERE t.id = v.id`,
+    ...bare.flatMap((topic) => {
+      const template = filled.get(topic.id)!;
+      return [topic.id, JSON.stringify(template.objectives), JSON.stringify(template.keyTerms)];
+    }),
+  );
+
+  return topics.map((topic) => ({ ...topic, ...(filled.get(topic.id) ?? {}) }));
 }
 
 /**

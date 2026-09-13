@@ -92,7 +92,7 @@ export function createLessonWorker(
     stockBank: stockQuestionBank,
     pausedFor: providerPausedFor,
     loadWork: loadWorkDefault,
-    prebuildPlan: (userId, materialId) => ensurePlan(userId, materialId, { background: true }),
+    prebuildPlan: (userId, materialId) => ensurePlan(userId, materialId),
     concurrency: env.llmConcurrency,
     ...overrides,
   };

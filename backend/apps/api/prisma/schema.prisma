@@ -136,6 +136,10 @@ model Topic {
   /// DRAFT: the structural reformat written during ingestion. The AI study notes
   /// replace it in the background, so a material is usable before they exist.
   lessonStatus         LessonStatus @default(DRAFT)
+  /// 2-3 verb-first learning outcomes and 3-6 key terms, normalised to one
+  /// template so every module of the learning plan reads the same way.
+  objectives           String[]     @default([])
+  keyTerms             String[]     @default([])
   createdAt            DateTime @default(now())
 
   material  Material               @relation(fields: [materialId], references: [id], onDelete: Cascade)

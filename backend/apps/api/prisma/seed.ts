@@ -3,6 +3,7 @@ import { DEFAULT_PREFERENCES } from '@educlm/contracts';
 import { closeDb, initDb } from '../src/db/client.js';
 import { chunkPages } from '../src/modules/ingestion/chunk.js';
 import { classifySection } from '../src/modules/ingestion/lessons.js';
+import { buildTopicTemplate } from '../src/modules/ingestion/topic-template.js';
 import { computeTopicMastery, detectFindingsForTopic } from '../src/modules/analytics/index.js';
 import { getEmbedder, toVectorLiteral } from '../src/lib/embeddings.js';
 import { DEMO_MATERIAL, DEMO_TOPICS, DEMO_VOCABULARY } from './seed-content.js';
@@ -195,6 +196,12 @@ async function main(): Promise<void> {
         summary: topic.summary,
         orderIndex,
         sourcePages,
+        // Templated from the demo lesson's own text, the same way ingestion
+        // fills a topic the model gave nothing usable for.
+        ...buildTopicTemplate({
+          name: topic.name,
+          passages: topic.pages.map((page) => ({ content: page.body })),
+        }),
         prerequisiteTopicIds: topic.prerequisiteSlugs
           .map((slug) => idBySlug.get(slug))
           .filter((id): id is string => Boolean(id)),

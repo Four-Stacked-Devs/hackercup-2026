@@ -56,6 +56,47 @@ export function percent(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
 }
 
+/**
+ * The words a plan step shows inside its module.
+ *
+ * The step's title repeats the topic ("Read: Queries") because it also stands
+ * alone — in "Up next" and in the adaptation banner. Inside a module the topic
+ * is already the heading, so every module lists the same template labels.
+ */
+export function stepLabel(step: Pick<PlanStep, 'kind' | 'insertedByAdaptation'>): string {
+  switch (step.kind) {
+    case 'read':
+      return 'Read the study notes';
+    case 'practice':
+      return step.insertedByAdaptation ? 'Focused practice set' : 'Practise 5 questions';
+    case 'review':
+      return 'Review the study notes';
+    case 'advance':
+      return 'Move on to the next topic';
+  }
+}
+
+/** "p. 7", "pp. 30–32, 34" — the same compression the server's step text uses. */
+export function pageLabel(pages: readonly number[]): string {
+  const sorted = [...new Set(pages)].sort((a, b) => a - b);
+  if (sorted.length === 0) return '';
+
+  const runs: string[] = [];
+  let start = sorted[0]!;
+  let previous = start;
+  for (const page of sorted.slice(1)) {
+    if (page === previous + 1) {
+      previous = page;
+      continue;
+    }
+    runs.push(start === previous ? `${start}` : `${start}–${previous}`);
+    start = previous = page;
+  }
+  runs.push(start === previous ? `${start}` : `${start}–${previous}`);
+
+  return `${sorted.length === 1 ? 'p.' : 'pp.'} ${runs.join(', ')}`;
+}
+
 export function minutesLabel(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);

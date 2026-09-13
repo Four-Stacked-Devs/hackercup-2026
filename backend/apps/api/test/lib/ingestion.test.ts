@@ -30,6 +30,8 @@ describe('planTopicRows', () => {
     summary: `${name} summary`,
     sourcePages: [1],
     prerequisiteSlugs,
+    objectives: [`Explain ${name}`, `Apply ${name}`],
+    keyTerms: [name],
   });
 
   it('resolves prerequisite slugs to ids before the insert', () => {

@@ -505,10 +505,13 @@ export function describeLlm(): { purpose: string; provider: string; model: strin
   const modelName = env.llmProvider === 'stub' ? STUB_MODEL_ID : env.LLM_MODEL;
 
   return [
-    { purpose: 'Topic extraction from uploaded material', provider, model: modelName },
+    {
+      purpose: 'Topic extraction, with learning outcomes and key terms per topic',
+      provider,
+      model: modelName,
+    },
     { purpose: 'Study-note lessons built from the material', provider, model: modelName },
     { purpose: 'Practice question generation', provider, model: modelName },
-    { purpose: 'Learning plan guidance', provider, model: modelName },
     { purpose: 'Grounded tutoring chat', provider, model: modelName },
   ];
 }

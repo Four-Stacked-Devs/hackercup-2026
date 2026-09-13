@@ -26,6 +26,7 @@ import type {
   TopicMastery,
 } from '@educlm/contracts';
 import type * as P from '../generated/prisma/client.js';
+import { buildPlanModules } from '../modules/plan/modules.js';
 import type { MasteryResult } from '../modules/analytics/index.js';
 
 /**
@@ -250,11 +251,29 @@ export function toPlanStep(row: P.PlanStep): PlanStep {
 export function toLearningPlan(
   row: P.LearningPlan,
   steps: P.PlanStep[],
+  topics: P.Topic[] = [],
 ): LearningPlan {
+  const ordered = [...steps].sort((a, b) => a.orderIndex - b.orderIndex).map(toPlanStep);
+
   return {
     id: row.id,
     materialId: row.materialId,
-    steps: [...steps].sort((a, b) => a.orderIndex - b.orderIndex).map(toPlanStep),
+    steps: ordered,
+    // The same steps grouped by topic. Built here so every client renders the
+    // plan from one template rather than regrouping it its own way.
+    modules: buildPlanModules(
+      ordered,
+      topics.map((topic) => ({
+        id: topic.id,
+        name: topic.name,
+        summary: topic.summary,
+        orderIndex: topic.orderIndex,
+        sourcePages: topic.sourcePages,
+        objectives: topic.objectives,
+        keyTerms: topic.keyTerms,
+        lessonStatus: toWire.lessonStatus(topic.lessonStatus),
+      })),
+    ),
     currentStepId: row.currentStepId,
     lastAdaptation: (row.lastAdaptation as LearningPlan['lastAdaptation']) ?? null,
   };

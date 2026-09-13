@@ -99,6 +99,9 @@ export const topicSchema = z.object({
   orderIndex: z.number().int().min(0),
   sourcePages: z.array(z.number().int().positive()),
   prerequisiteTopicIds: z.array(z.string()),
+  /** 2-3 verb-first outcomes and 3-6 key terms, one shape for every topic. */
+  objectives: z.array(z.string()),
+  keyTerms: z.array(z.string()),
   lessonStatus: lessonStatusSchema,
   questionCount: z.number().int().min(0),
   /** null until any response exists. */
@@ -273,10 +276,36 @@ export const planAdaptationSchema = z.object({
 });
 export type PlanAdaptation = z.infer<typeof planAdaptationSchema>;
 
+/**
+ * A topic's slice of the plan, so every module renders from the same template.
+ *
+ * `stepIds` point into `steps`, which stays the plan's order of work — the
+ * modules are a second view of those rows, never a second source of truth.
+ */
+export const planModuleSchema = z.object({
+  /** null for the trailing "General" module: steps not tied to a topic. */
+  topicId: z.string().nullable(),
+  topicName: z.string(),
+  summary: z.string(),
+  sourcePages: z.array(z.number().int().positive()),
+  objectives: z.array(z.string()),
+  keyTerms: z.array(z.string()),
+  lessonStatus: lessonStatusSchema,
+  stepIds: z.array(z.string()),
+  /** Minutes left, steps done and steps outstanding — skipped steps excluded. */
+  estimatedMinutes: z.number().int().min(0),
+  completedSteps: z.number().int().min(0),
+  totalSteps: z.number().int().min(0),
+  status: z.enum(['pending', 'in_progress', 'completed']),
+});
+export type PlanModule = z.infer<typeof planModuleSchema>;
+
 export const learningPlanSchema = z.object({
   id: z.string(),
   materialId: z.string(),
   steps: z.array(planStepSchema),
+  /** The same steps grouped by topic, in course order. */
+  modules: z.array(planModuleSchema),
   currentStepId: z.string().nullable(),
   lastAdaptation: planAdaptationSchema.nullable(),
 });

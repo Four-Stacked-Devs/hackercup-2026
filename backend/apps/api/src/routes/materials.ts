@@ -199,6 +199,8 @@ export function materialRoutes(queue: JobQueue): FastifyPluginAsyncZod {
               orderIndex: topic.orderIndex,
               sourcePages: topic.sourcePages,
               prerequisiteTopicIds: topic.prerequisiteTopicIds,
+              objectives: topic.objectives,
+              keyTerms: topic.keyTerms,
               lessonStatus: toWire.lessonStatus(topic.lessonStatus),
               questionCount: topic._count.questions,
               // null until any response exists — not a zeroed-out band.
