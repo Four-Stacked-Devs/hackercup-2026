@@ -48,8 +48,21 @@ const rawEnvSchema = z.object({
   ),
 
   // Embeddings
-  EMBEDDING_PROVIDER: z.enum(['local', 'openai', 'stub']).default('local'),
-  EMBEDDING_MODEL: z.string().default('Xenova/bge-small-en-v1.5'),
+  EMBEDDING_PROVIDER: z.enum(['local', 'google', 'openai', 'stub']).default('local'),
+  /** Blank means the provider's default in DEFAULT_EMBEDDING_MODEL. */
+  EMBEDDING_MODEL: optionalSetting,
+  /**
+   * Key for a hosted embedder. Blank means LLM_API_KEY when it belongs to the
+   * same provider (a Gemini key serves both Gemini models and embeddings).
+   */
+  EMBEDDING_API_KEY: optionalSetting,
+  /** Per-minute pacing. Blank means the provider's free-tier default in DEFAULT_EMBEDDING_LIMITS. */
+  EMBEDDING_MAX_RPM: optionalSetting.transform((v) => (v ? Number(v) : undefined)).pipe(
+    z.number().int().positive().optional(),
+  ),
+  EMBEDDING_MAX_TPM: optionalSetting.transform((v) => (v ? Number(v) : undefined)).pipe(
+    z.number().int().positive().optional(),
+  ),
   EMBEDDING_DIMS: z.coerce.number().int().positive().default(384),
   EMBEDDING_CACHE_DIR: z.string().default('./.models'),
   /**
@@ -155,10 +168,68 @@ const llmLimits = {
   tpm: raw.LLM_MAX_TPM ?? DEFAULT_LLM_LIMITS[llmProvider].tpm,
 };
 
-const embeddingProvider: 'local' | 'openai' | 'stub' =
-  raw.EMBEDDING_PROVIDER === 'openai' && !(raw.OPENAI_API_KEY ?? raw.LLM_API_KEY)
+export type EmbeddingProvider = 'local' | 'google' | 'openai' | 'stub';
+
+/**
+ * Every default emits (or is asked for) 384 dimensions, the width of the
+ * pgvector column. Gemini's is 3072 natively and truncated on request.
+ */
+const DEFAULT_EMBEDDING_MODEL: Record<EmbeddingProvider, string> = {
+  local: 'Xenova/bge-small-en-v1.5',
+  google: 'gemini-embedding-001',
+  openai: 'text-embedding-3-small',
+  stub: 'stub-hashed-bow',
+};
+
+/**
+ * Gemini's free tier refused a request once a minute's embedding passed ~30K
+ * tokens (measured; the published tables leave it to AI Studio). Kept under.
+ */
+const DEFAULT_EMBEDDING_LIMITS: Record<EmbeddingProvider, { rpm?: number; tpm?: number }> = {
+  local: {},
+  google: { rpm: 90, tpm: 27_000 },
+  openai: {},
+  stub: {},
+};
+
+/** A key from the LLM settings only counts when it is for the same provider. */
+const embeddingApiKey =
+  raw.EMBEDDING_API_KEY ??
+  (raw.EMBEDDING_PROVIDER === 'openai'
+    ? (raw.OPENAI_API_KEY ?? (raw.LLM_PROVIDER === 'openai' ? raw.LLM_API_KEY : undefined))
+    : raw.EMBEDDING_PROVIDER === 'google' && raw.LLM_PROVIDER === 'google'
+      ? raw.LLM_API_KEY
+      : undefined);
+
+/** A hosted embedder with no key falls back to the stub, like the LLM does. */
+const embeddingProvider: EmbeddingProvider =
+  (raw.EMBEDDING_PROVIDER === 'openai' || raw.EMBEDDING_PROVIDER === 'google') && !embeddingApiKey
     ? 'stub'
     : raw.EMBEDDING_PROVIDER;
+
+/**
+ * `Xenova/bge-small-en-v1.5` is a Hugging Face id, which only the local
+ * embedder can load. Left in .env after switching EMBEDDING_PROVIDER to a
+ * hosted one, it was sent to Gemini, which answered every passage with a 404 —
+ * so a hosted provider ignores an `owner/name` id and uses its own default.
+ */
+function hostedEmbeddingModel(provider: 'google' | 'openai'): string {
+  const configured = raw.EMBEDDING_MODEL?.replace(/^(?:google\/|models\/|openai\/)+/, '');
+  if (configured && !configured.includes('/')) return configured;
+  if (configured) {
+    console.warn(
+      `[env] EMBEDDING_MODEL=${raw.EMBEDDING_MODEL} is a local model; using ${DEFAULT_EMBEDDING_MODEL[provider]} for EMBEDDING_PROVIDER=${provider}.`,
+    );
+  }
+  return DEFAULT_EMBEDDING_MODEL[provider];
+}
+
+const embeddingModel =
+  embeddingProvider === 'google' || embeddingProvider === 'openai'
+    ? hostedEmbeddingModel(embeddingProvider)
+    : embeddingProvider === 'stub'
+      ? DEFAULT_EMBEDDING_MODEL.stub
+      : (raw.EMBEDDING_MODEL ?? DEFAULT_EMBEDDING_MODEL.local);
 
 const dbMode: DbMode = raw.DATABASE_URL ? 'postgres' : 'pglite';
 
@@ -170,6 +241,12 @@ export const env = {
   llmLimits,
   llmConcurrency: raw.LLM_CONCURRENCY ?? DEFAULT_LLM_CONCURRENCY[llmProvider],
   embeddingProvider,
+  EMBEDDING_MODEL: embeddingModel,
+  embeddingApiKey,
+  embeddingLimits: {
+    rpm: raw.EMBEDDING_MAX_RPM ?? DEFAULT_EMBEDDING_LIMITS[embeddingProvider].rpm,
+    tpm: raw.EMBEDDING_MAX_TPM ?? DEFAULT_EMBEDDING_LIMITS[embeddingProvider].tpm,
+  },
   /** True when nothing external is configured — used for the boot banner. */
   isFullyOffline: dbMode === 'pglite' && llmProvider === 'stub',
 } as const;
@@ -201,6 +278,6 @@ export function describeMode(): string {
       ? 'stub (deterministic hashed vectors)'
       : env.embeddingProvider === 'local'
         ? `local ${env.EMBEDDING_MODEL} (${VECTOR_DIMS}d, ${env.EMBEDDING_DTYPE})`
-        : `openai ${env.EMBEDDING_MODEL}`;
+        : `${env.embeddingProvider} ${env.EMBEDDING_MODEL} (${VECTOR_DIMS}d)`;
   return `db=${db}  llm=${llm}  embeddings=${emb}`;
 }

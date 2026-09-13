@@ -14,7 +14,7 @@
  * Both use `pnpm --filter @educlm/api ...`, which sets cwd to apps/api.
  *
  * No-ops unless the local embedder is actually selected, so it is safe to leave
- * in the build command when EMBEDDING_PROVIDER is stub or openai.
+ * in the build command when EMBEDDING_PROVIDER is google, openai or stub.
  */
 import { resolve } from 'node:path';
 import { env, VECTOR_DIMS } from '../src/env.js';

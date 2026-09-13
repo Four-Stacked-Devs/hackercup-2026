@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { IngestionStage, LessonStatus } from '../../generated/prisma/enums.js';
 import { db } from '../../db/client.js';
-import { getEmbedder, toVectorLiteral } from '../../lib/embeddings.js';
 import { ApiException } from '../../lib/errors.js';
 import { createLlmClient, type LlmLogger } from '../../lib/llm.js';
 import { extractPdf } from '../../lib/pdf.js';
@@ -14,7 +13,12 @@ import { GENERIC_VOCABULARY } from './vocabulary.js';
 /**
  * The ingestion pipeline — the part of an upload the student waits for.
  *
- *   extract → chunk → (course map ‖ embeddings) → draft lessons → READY
+ *   extract → chunk → course map → draft lessons → READY
+ *
+ * Passages are embedded beside it by the embedding job (jobs/embeddings.ts),
+ * started as soon as they are stored. A hosted embedder's free tier is paced to
+ * the minute, and retrieval falls back to keyword search until a material's
+ * vectors are all in, so nothing here waits for them.
  *
  * It stops at READY on purpose. The AI study notes are one model call per
  * topic — minutes for a long module on a free tier — and nothing but the lesson
@@ -32,6 +36,8 @@ export interface PipelineLogger extends LlmLogger {
 }
 
 export interface IngestionHooks {
+  /** Fired once the passages are stored, to start embedding them. */
+  onChunks?: (materialId: string) => void;
   /** Fired once the material is READY, to start writing study notes. */
   onReady?: (materialId: string) => void;
 }
@@ -105,6 +111,8 @@ export async function runIngestion(
     const previous = await findReusableMaterial(material.userId, material.contentHash, materialId);
     if (previous) {
       await timer.time('copy', () => copyMaterial(previous.id, materialId));
+      // The copy's vectors may be from a model this deploy no longer uses.
+      hooks.onChunks?.(materialId);
       await markReady(materialId);
       logger.info(`[ingest] ${materialId} ready (copied from an identical upload): ${timer.summary()}`);
       hooks.onReady?.(materialId);
@@ -142,9 +150,9 @@ export async function runIngestion(
       );
     }
 
-    const storedChunks = await timer.time('chunk', async () => {
+    await timer.time('chunk', async () => {
       await db().chunk.deleteMany({ where: { materialId } });
-      return db().chunk.createManyAndReturn({
+      await db().chunk.createMany({
         data: drafts.map((chunk) => ({
           materialId,
           page: chunk.page,
@@ -153,19 +161,17 @@ export async function runIngestion(
           charCount: chunk.charCount,
           sectionTitle: chunk.sectionTitle,
         })),
-        select: { id: true, content: true },
       });
     });
 
-    // ── 3. course map ‖ embeddings ───────────────────────────────────────────
-    // Independent: the model call waits on the network, the local embedder on
-    // the CPU. Run back to back they cost the sum; overlapped, the longer one.
+    hooks.onChunks?.(materialId);
+
+    // ── 3. course map ────────────────────────────────────────────────────────
     await setStage(materialId, 'EXTRACTING_TOPICS');
 
-    const [courseMap] = await Promise.all([
-      timer.time('course map', () => extractCourseMap(drafts, llm, material.title)),
-      timer.time('embed', () => embedChunks(storedChunks, logger)),
-    ]);
+    const courseMap = await timer.time('course map', () =>
+      extractCourseMap(drafts, llm, material.title),
+    );
     if (courseMap.usedFallback) logger.warn('[ingest] course map used the deterministic fallback');
 
     const topics = await timer.time('store topics', async () => {
@@ -306,8 +312,8 @@ async function copyMaterial(fromId: string, toId: string): Promise<void> {
 
   // Raw because Prisma cannot read or write the vector column.
   await db().$executeRawUnsafe(
-    `INSERT INTO "Chunk" (id, "materialId", page, "orderIndex", content, "charCount", "sectionTitle", embedding)
-     SELECT gen_random_uuid()::text, $1, page, "orderIndex", content, "charCount", "sectionTitle", embedding
+    `INSERT INTO "Chunk" (id, "materialId", page, "orderIndex", content, "charCount", "sectionTitle", embedding, "embeddingModel")
+     SELECT gen_random_uuid()::text, $1, page, "orderIndex", content, "charCount", "sectionTitle", embedding, "embeddingModel"
      FROM "Chunk" WHERE "materialId" = $2`,
     toId,
     fromId,
@@ -345,52 +351,5 @@ async function copyMaterial(fromId: string, toId: string): Promise<void> {
         topicId: newId.get(topicId)!,
       })),
     });
-  }
-}
-
-const EMBED_BATCH = 32;
-
-/**
- * One UPDATE per batch of chunks, not one per chunk.
- *
- * Each statement is a network round trip (~240 ms to the hosted database from
- * here), so a 100-chunk module spent ~24 s just writing vectors one at a time.
- */
-export function buildEmbeddingUpdate(batch: { id: string; vector: number[] }[]): {
-  sql: string;
-  params: string[];
-} {
-  const values = batch.map((_, i) => `($${i * 2 + 1}::text, $${i * 2 + 2}::text)`).join(', ');
-  return {
-    sql: `UPDATE "Chunk" AS c SET embedding = v.embedding::vector FROM (VALUES ${values}) AS v(id, embedding) WHERE c.id = v.id`,
-    params: batch.flatMap((row) => [row.id, toVectorLiteral(row.vector)]),
-  };
-}
-
-async function embedChunks(
-  chunks: { id: string; content: string }[],
-  logger: PipelineLogger,
-): Promise<void> {
-  if (chunks.length === 0) return;
-
-  const embedder = getEmbedder();
-
-  for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
-    const batch = chunks.slice(i, i + EMBED_BATCH);
-
-    try {
-      const vectors = await embedder.embed(batch.map((c) => c.content));
-      const rows = batch.flatMap((chunk, index) =>
-        vectors[index] ? [{ id: chunk.id, vector: vectors[index] }] : [],
-      );
-      if (rows.length === 0) continue;
-
-      // Prisma cannot write an Unsupported() column; raw SQL is required.
-      const { sql, params } = buildEmbeddingUpdate(rows);
-      await db().$executeRawUnsafe(sql, ...params);
-    } catch (error) {
-      // Retrieval degrades to keyword search; it is not worth failing the upload.
-      logger.warn(`[ingest] embedding batch failed: ${(error as Error).message}`);
-    }
   }
 }

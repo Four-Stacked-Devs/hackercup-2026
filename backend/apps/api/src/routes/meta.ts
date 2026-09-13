@@ -17,8 +17,14 @@ const LIBRARIES = [
   { name: 'PostgreSQL + pgvector', license: 'PostgreSQL / MIT', url: 'https://github.com/pgvector/pgvector' },
   { name: 'PGlite', license: 'Apache-2.0', url: 'https://pglite.dev' },
   { name: 'Vercel AI SDK', license: 'Apache-2.0', url: 'https://sdk.vercel.ai' },
-  { name: 'Transformers.js', license: 'Apache-2.0', url: 'https://huggingface.co/docs/transformers.js' },
-  { name: 'BAAI/bge-small-en-v1.5', license: 'MIT', url: 'https://huggingface.co/BAAI/bge-small-en-v1.5' },
+  // Only what runs: the local embedding model and its runtime are not loaded
+  // when a hosted embedder is configured.
+  ...(env.embeddingProvider === 'local'
+    ? [
+        { name: 'Transformers.js', license: 'Apache-2.0', url: 'https://huggingface.co/docs/transformers.js' },
+        { name: 'BAAI/bge-small-en-v1.5', license: 'MIT', url: 'https://huggingface.co/BAAI/bge-small-en-v1.5' },
+      ]
+    : []),
   { name: 'unpdf', license: 'MIT', url: 'https://github.com/unjs/unpdf' },
   { name: 'Zod', license: 'MIT', url: 'https://zod.dev' },
   { name: 'p-queue', license: 'MIT', url: 'https://github.com/sindresorhus/p-queue' },

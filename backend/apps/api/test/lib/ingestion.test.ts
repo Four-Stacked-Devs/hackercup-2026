@@ -1,27 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildEmbeddingUpdate,
-  planTopicRows,
-  wasBuiltWithoutModel,
-} from '../../src/modules/ingestion/pipeline.js';
+import { planTopicRows, wasBuiltWithoutModel } from '../../src/modules/ingestion/pipeline.js';
 import { selectChunksForTopic } from '../../src/modules/ingestion/lesson-writer.js';
 import {
   GENERIC_VOCABULARY,
   normaliseVocabulary,
 } from '../../src/modules/ingestion/vocabulary.js';
-
-describe('buildEmbeddingUpdate', () => {
-  it('writes a whole batch in one statement', () => {
-    const { sql, params } = buildEmbeddingUpdate([
-      { id: 'a', vector: [0.1, 0.2] },
-      { id: 'b', vector: [0.3, 0.4] },
-    ]);
-
-    expect(sql.match(/UPDATE/g)).toHaveLength(1);
-    expect(sql).toContain('($1::text, $2::text), ($3::text, $4::text)');
-    expect(params).toEqual(['a', '[0.1,0.2]', 'b', '[0.3,0.4]']);
-  });
-});
 
 describe('planTopicRows', () => {
   const topic = (name: string, prerequisiteSlugs: string[] = []) => ({

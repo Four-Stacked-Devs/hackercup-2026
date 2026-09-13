@@ -98,8 +98,13 @@ own headings, lessons from a structural reformat, questions from cloze extractio
 Everything stays grounded in the source text — the difference is polish, not
 whether it works.
 
-Embeddings never need a key. `bge-small-en-v1.5` runs in-process via ONNX;
-the ~130 MB model downloads once into `./.models`.
+Embeddings need no key by default. `bge-small-en-v1.5` runs in-process via
+ONNX; the ~130 MB model downloads once into `./.models`. The deploy uses
+`EMBEDDING_PROVIDER=google` instead (Gemini's `gemini-embedding-001` at 384
+dims, on the LLM's free key), because the local model does not fit a 512 MB
+instance. Passages are embedded in the background after upload, and each
+records the model that embedded it; retrieval uses keyword search for a
+material until its passages all have vectors from the current model.
 
 ### 3. Deploying to Render (free tier)
 
@@ -124,8 +129,10 @@ changed:
 - **`pnpm install --prod=false`** — Render sets `NODE_ENV=production`, which
   makes pnpm skip `devDependencies`. `typescript`, `tsx` and the `prisma` CLI
   all live there.
-- **`EMBEDDING_DTYPE=q8`** — the free instance is 512 MB. fp32 weights are
-  ~130 MB resident alongside Node, Fastify, Prisma and `unpdf` page buffers.
+- **`EMBEDDING_PROVIDER=google`** — the free instance is 512 MB. With
+  onnxruntime loaded, preparing a 61-page PDF peaked at ~450 MB and the
+  instance was killed mid-upload; with Gemini embeddings the same upload peaks
+  at ~225 MB. Leave `EMBEDDING_MODEL` unset so it uses `gemini-embedding-001`.
 - **`pnpm --filter` in both `buildCommand` and `startCommand`** — it sets the
   working directory to `apps/api`, and `EMBEDDING_CACHE_DIR` is the relative
   `./.models`. A different cwd at start silently misses what the build cached

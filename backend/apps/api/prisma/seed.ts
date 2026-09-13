@@ -5,7 +5,8 @@ import { chunkPages } from '../src/modules/ingestion/chunk.js';
 import { classifySection } from '../src/modules/ingestion/lessons.js';
 import { buildTopicTemplate } from '../src/modules/ingestion/topic-template.js';
 import { computeTopicMastery, detectFindingsForTopic } from '../src/modules/analytics/index.js';
-import { getEmbedder, toVectorLiteral } from '../src/lib/embeddings.js';
+import { buildEmbeddingUpdate } from '../src/jobs/embeddings.js';
+import { getEmbedder } from '../src/lib/embeddings.js';
 import { DEMO_MATERIAL, DEMO_TOPICS, DEMO_VOCABULARY } from './seed-content.js';
 import { DEMO_QUESTIONS } from './seed-questions.js';
 
@@ -571,15 +572,12 @@ async function embedSeedChunks(
       const batch = chunks.slice(i, i + batchSize);
       const vectors = await embedder.embed(batch.map((c) => c.content));
 
-      for (const [index, chunk] of batch.entries()) {
-        const vector = vectors[index];
-        if (!vector) continue;
-        await db.$executeRawUnsafe(
-          `UPDATE "Chunk" SET embedding = $1::vector WHERE id = $2`,
-          toVectorLiteral(vector),
-          chunk.id,
-        );
-      }
+      const rows = batch.flatMap((chunk, index) =>
+        vectors[index] ? [{ id: chunk.id, vector: vectors[index] }] : [],
+      );
+      if (rows.length === 0) continue;
+      const { sql, params } = buildEmbeddingUpdate(rows, embedder.modelId);
+      await db.$executeRawUnsafe(sql, ...params);
     }
 
     logger.info('[seed] embeddings written');

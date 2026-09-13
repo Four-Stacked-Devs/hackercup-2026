@@ -1,15 +1,16 @@
 import PQueue from 'p-queue';
 import { db } from '../db/client.js';
 import { runIngestion, type PipelineLogger } from '../modules/ingestion/pipeline.js';
+import { createEmbeddingWorker } from './embeddings.js';
 import { createLessonWorker } from './lessons.js';
 import { createPracticeWorker } from './practice.js';
 
 /**
  * In-process background queue for the MVP.
  *
- * Concurrency 1: ingestion is CPU-heavy (PDF parsing plus local ONNX
- * embeddings) and the free Groq tier is rate-limited, so running uploads in
- * parallel would make every one of them slower.
+ * Concurrency 1: PDF parsing is the heaviest thing the 512MB instance does,
+ * and the free model tiers are rate-limited, so running uploads in parallel
+ * would make every one of them slower.
  *
  * The interface is deliberately narrow so this can be swapped for BullMQ
  * without touching the routes.
@@ -22,6 +23,8 @@ export interface JobQueue {
   prioritizeLesson(topicId: string): void;
   /** Fill a practice set created GENERATING. */
   enqueuePracticeSet(setId: string): void;
+  /** Embed any passage without a vector from the current model. */
+  enqueueEmbeddings(): void;
   /** Test/shutdown helper. */
   onIdle(): Promise<void>;
   readonly pending: number;
@@ -31,6 +34,7 @@ export function createJobQueue(logger: PipelineLogger): JobQueue {
   const queue = new PQueue({ concurrency: 1 });
   const lessons = createLessonWorker(logger);
   const practice = createPracticeWorker(logger);
+  const embeddings = createEmbeddingWorker(logger);
 
   const enqueueLessons = (materialId: string) => {
     lessons.enqueueMaterial(materialId).catch((error) => {
@@ -42,7 +46,10 @@ export function createJobQueue(logger: PipelineLogger): JobQueue {
     enqueueIngestion(materialId: string) {
       void queue.add(async () => {
         try {
-          await runIngestion(materialId, logger, { onReady: enqueueLessons });
+          await runIngestion(materialId, logger, {
+            onChunks: () => embeddings.kick(),
+            onReady: enqueueLessons,
+          });
         } catch (error) {
           // runIngestion already records failure on the material row; this is
           // the last-resort guard so one bad job cannot take down the worker.
@@ -57,13 +64,17 @@ export function createJobQueue(logger: PipelineLogger): JobQueue {
 
     enqueuePracticeSet: (setId) => practice.enqueue(setId),
 
+    enqueueEmbeddings: () => embeddings.kick(),
+
     onIdle: async () => {
       await queue.onIdle();
-      await Promise.all([lessons.onIdle(), practice.onIdle()]);
+      await Promise.all([lessons.onIdle(), practice.onIdle(), embeddings.onIdle()]);
     },
 
     get pending() {
-      return queue.size + queue.pending + lessons.pending + practice.pending;
+      return (
+        queue.size + queue.pending + lessons.pending + practice.pending + embeddings.pending
+      );
     },
   };
 }
@@ -108,6 +119,10 @@ export async function resumeInterruptedIngestion(
   });
 
   for (const { id } of sets) queue.enqueuePracticeSet(id);
+
+  // Passages a restart left without vectors, or embedded by a model this
+  // deploy no longer uses. The job finds them itself.
+  queue.enqueueEmbeddings();
 
   const resumed = orphans.length + unfinished.length + sets.length;
   if (resumed > 0) {

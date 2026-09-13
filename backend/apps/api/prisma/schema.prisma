@@ -109,14 +109,16 @@ model PageText {
 }
 
 model Chunk {
-  id           String  @id @default(cuid())
-  materialId   String
-  page         Int
-  orderIndex   Int
-  content      String
-  charCount    Int
-  sectionTitle String?
-  embedding    Unsupported("vector(384)")?
+  id             String  @id @default(cuid())
+  materialId     String
+  page           Int
+  orderIndex     Int
+  content        String
+  charCount      Int
+  sectionTitle   String?
+  embedding      Unsupported("vector(384)")?
+  /// The model that wrote `embedding`. Vectors from different models are not comparable.
+  embeddingModel String?
 
   material  Material   @relation(fields: [materialId], references: [id], onDelete: Cascade)
   questions Question[]

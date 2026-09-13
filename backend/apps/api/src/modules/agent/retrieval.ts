@@ -93,32 +93,63 @@ async function vectorSearch(
   limit: number,
 ): Promise<RetrievedChunk[]> {
   try {
-    const [vector] = await getEmbedder().embed([query]);
+    const embedder = getEmbedder();
+    if (!(await fullyEmbedded(materialId, pages, embedder.modelId))) return [];
+
+    const [vector] = await embedder.embed([query], 'query');
     if (!vector) return [];
 
     const literal = toVectorLiteral(vector);
 
     // `1 - cosine_distance` so higher is more similar, matching the field name.
+    // Only vectors from the model that embedded the question are comparable.
     const sql = pages
       ? `SELECT id, page, "sectionTitle", content,
                 1 - (embedding <=> $1::vector) AS similarity
          FROM "Chunk"
-         WHERE "materialId" = $2 AND embedding IS NOT NULL AND page = ANY($3::int[])
+         WHERE "materialId" = $2 AND "embeddingModel" = $3 AND embedding IS NOT NULL
+           AND page = ANY($5::int[])
          ORDER BY embedding <=> $1::vector
          LIMIT $4`
       : `SELECT id, page, "sectionTitle", content,
                 1 - (embedding <=> $1::vector) AS similarity
          FROM "Chunk"
-         WHERE "materialId" = $2 AND embedding IS NOT NULL
+         WHERE "materialId" = $2 AND "embeddingModel" = $3 AND embedding IS NOT NULL
          ORDER BY embedding <=> $1::vector
-         LIMIT $3`;
+         LIMIT $4`;
 
-    const args = pages ? [literal, materialId, pages, limit] : [literal, materialId, limit];
+    const args = [literal, materialId, embedder.modelId, limit, ...(pages ? [pages] : [])];
 
     return await db().$queryRawUnsafe<RetrievedChunk[]>(sql, ...args);
   } catch {
     return [];
   }
+}
+
+/**
+ * Whether every passage in scope has a vector from `model`.
+ *
+ * Passages are embedded in the background after upload. Searching while only
+ * some have vectors would rank just those, and quietly miss the best passage
+ * among the rest; keyword search covers the whole material until they are in.
+ */
+async function fullyEmbedded(
+  materialId: string,
+  pages: number[] | null,
+  model: string,
+): Promise<boolean> {
+  const [row] = await db().$queryRawUnsafe<{ missing: boolean }[]>(
+    `SELECT EXISTS (
+       SELECT 1 FROM "Chunk"
+        WHERE "materialId" = $1
+          AND (embedding IS NULL OR "embeddingModel" IS DISTINCT FROM $2)
+          ${pages ? 'AND page = ANY($3::int[])' : ''}
+     ) AS missing`,
+    materialId,
+    model,
+    ...(pages ? [pages] : []),
+  );
+  return row ? !row.missing : false;
 }
 
 async function keywordSearch(
